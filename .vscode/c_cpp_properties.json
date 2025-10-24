@@ -1,0 +1,26 @@
+{
+  "configurations": [
+    {
+      "name": "Pebble",
+      "includePath": [
+        "${workspaceFolder}/**",
+        "${workspaceFolder}/build/include",
+        "/Users/gbgk/Library/Application Support/Pebble SDK/SDKs/4.5/sdk-core/pebble/basalt/include",
+        "/Users/gbgk/Library/Application Support/Pebble SDK/SDKs/4.5/sdk-core/pebble/include"
+      ],
+      "defines": [
+        "RELEASE",
+        "PBL_PLATFORM_BASALT",
+        "PBL_COLOR",
+        "PBL_ROUND=0",
+        "PBL_RECT",
+        "PBL_SDK_3"
+      ],
+      "compilerPath": "/usr/bin/gcc",
+      "cStandard": "c11",
+      "cppStandard": "c++11",
+      "intelliSenseMode": "gcc-arm"
+    }
+  ],
+  "version": 4
+}

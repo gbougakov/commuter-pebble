@@ -1,0 +1,93 @@
+{
+  "name": "nmbs",
+  "author": "MakeAwesomeHappen",
+  "version": "1.0.0",
+  "keywords": ["pebble-app"],
+  "private": true,
+  "dependencies": {},
+  "pebble": {
+    "displayName": "nmbs",
+    "uuid": "0a2adab1-0081-4e7b-9e3f-d2b47b9c9409",
+    "sdkVersion": "3",
+    "enableMultiJS": true,
+    "targetPlatforms": [
+      "aplite",
+      "basalt",
+      "chalk",
+      "diorite",
+      "emery",
+      "flint"
+    ],
+    "watchapp": {
+      "watchface": false
+    },
+    "messageKeys": [
+      "MESSAGE_TYPE",
+      "FROM_STATION",
+      "TO_STATION",
+      "DEPARTURE_INDEX",
+      "DESTINATION",
+      "DEPART_TIME",
+      "ARRIVE_TIME",
+      "PLATFORM",
+      "TRAIN_TYPE",
+      "DURATION",
+      "DEPART_DELAY",
+      "ARRIVE_DELAY",
+      "IS_DIRECT",
+      "PLATFORM_CHANGED",
+      "REQUEST_DATA",
+      "DATA_COUNT",
+      "REQUEST_DETAILS",
+      "DETAIL_DESTINATION",
+      "DETAIL_DIRECTION",
+      "VIA_COUNT",
+      "VIA_STATION",
+      "VIA_TIME"
+    ],
+    "resources": {
+      "media": [
+        {
+          "type": "bitmap",
+          "name": "ICON_SWITCH",
+          "file": "switch.png"
+        },
+        {
+          "type": "bitmap",
+          "name": "ICON_SWITCH_WHITE",
+          "file": "switch_white.png"
+        },
+        {
+          "type": "bitmap",
+          "name": "ICON_AIRPORT",
+          "file": "airport.png"
+        },
+        {
+          "type": "bitmap",
+          "name": "ICON_AIRPORT_WHITE",
+          "file": "airport_white.png"
+        },
+        {
+          "type": "bitmap",
+          "name": "ICON_START",
+          "file": "start.png"
+        },
+        {
+          "type": "bitmap",
+          "name": "ICON_START_WHITE",
+          "file": "start_white.png"
+        },
+        {
+          "type": "bitmap",
+          "name": "ICON_FINISH",
+          "file": "finish.png"
+        },
+        {
+          "type": "bitmap",
+          "name": "ICON_FINISH_WHITE",
+          "file": "finish_white.png"
+        }
+      ]
+    }
+  }
+}
