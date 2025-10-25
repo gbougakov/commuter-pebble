@@ -169,14 +169,119 @@
             color: #6c757d;
         }
 
+        .schedule-actions {
+            display: flex;
+            gap: 6px;
+        }
+
+        .btn-edit {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 4px 10px;
+            border-radius: 4px;
+            font-size: 12px;
+            cursor: pointer;
+        }
+
         .btn-remove {
             background: #dc3545;
             color: white;
             border: none;
-            padding: 4px 8px;
+            padding: 4px 10px;
             border-radius: 4px;
             font-size: 12px;
             cursor: pointer;
+        }
+
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 1000;
+            overflow-y: auto;
+        }
+
+        .modal-overlay.active {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 16px;
+        }
+
+        .modal-content {
+            background: white;
+            border-radius: 8px;
+            max-width: 500px;
+            width: 100%;
+            max-height: 90vh;
+            overflow-y: auto;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.2);
+        }
+
+        .modal-header {
+            padding: 16px;
+            border-bottom: 1px solid #dee2e6;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .modal-title {
+            font-size: 18px;
+            font-weight: 600;
+        }
+
+        .modal-close {
+            background: none;
+            border: none;
+            font-size: 24px;
+            color: #6c757d;
+            cursor: pointer;
+            padding: 0;
+            width: 32px;
+            height: 32px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal-body {
+            padding: 16px;
+        }
+
+        .modal-footer {
+            padding: 16px;
+            border-top: 1px solid #dee2e6;
+            display: flex;
+            gap: 8px;
+        }
+
+        .btn-secondary {
+            background: #6c757d;
+            color: white;
+            padding: 10px 16px;
+            border: none;
+            border-radius: 4px;
+            font-size: 14px;
+            cursor: pointer;
+            flex: 1;
+        }
+
+        .btn-save {
+            background: #28a745;
+            color: white;
+            padding: 10px 16px;
+            border: none;
+            border-radius: 4px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            flex: 2;
         }
 
         .btn {
@@ -334,6 +439,58 @@
         <button class="btn btn-success" onclick="saveConfig()">💾 Save Configuration</button>
     </div>
 
+    <!-- Schedule Editor Modal -->
+    <div class="modal-overlay" id="scheduleModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <div class="modal-title" id="modalTitle">Edit Schedule</div>
+                <button class="modal-close" onclick="closeScheduleModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label class="form-label">From Station</label>
+                    <select id="editFromStation">
+                        <option value="">Select station...</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">To Station</label>
+                    <select id="editToStation">
+                        <option value="">Select station...</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Days</label>
+                    <div class="day-selector">
+                        <button type="button" class="day-btn" data-day="1" onclick="toggleDay(1)">Mon</button>
+                        <button type="button" class="day-btn" data-day="2" onclick="toggleDay(2)">Tue</button>
+                        <button type="button" class="day-btn" data-day="3" onclick="toggleDay(3)">Wed</button>
+                        <button type="button" class="day-btn" data-day="4" onclick="toggleDay(4)">Thu</button>
+                        <button type="button" class="day-btn" data-day="5" onclick="toggleDay(5)">Fri</button>
+                        <button type="button" class="day-btn" data-day="6" onclick="toggleDay(6)">Sat</button>
+                        <button type="button" class="day-btn" data-day="0" onclick="toggleDay(0)">Sun</button>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Start Time</label>
+                    <input type="time" id="editStartTime" value="07:00">
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">End Time</label>
+                    <input type="time" id="editEndTime" value="09:00">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" onclick="closeScheduleModal()">Cancel</button>
+                <button class="btn-save" onclick="saveScheduleEdit()">Save Schedule</button>
+            </div>
+        </div>
+    </div>
+
     <script>
         // Configuration state
         var stationCache = [];
@@ -341,6 +498,10 @@
         var smartSchedules = [];
         var currentMode = 'simple';
         var maxStations = 6;
+
+        // Schedule editor state
+        var editingScheduleIndex = -1;  // -1 = creating new, >=0 = editing existing
+        var editingScheduleDays = [];   // Currently selected days in editor
 
         // Day names
         var dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -558,7 +719,10 @@
                     html += '<div class="schedule-item">';
                     html += '<div class="schedule-header">';
                     html += '<div class="schedule-route">' + fromName + ' → ' + toName + '</div>';
+                    html += '<div class="schedule-actions">';
+                    html += '<button class="btn-edit" onclick="editSchedule(' + i + ')">Edit</button>';
                     html += '<button class="btn-remove" onclick="removeSchedule(' + i + ')">Remove</button>';
+                    html += '</div>';
                     html += '</div>';
                     html += '<div class="schedule-details">' +
                             daysText + ' • ' +
@@ -600,22 +764,21 @@
                 return;
             }
 
-            // Create a basic schedule with default values
-            var schedule = {
-                id: 'custom-' + Date.now(),
+            // Open modal in "create" mode
+            editingScheduleIndex = -1;
+            openScheduleModal({
                 fromId: favoriteStations[0],
                 toId: favoriteStations[1],
                 days: [1, 2, 3, 4, 5],  // Weekdays by default
                 startTime: '07:00',
-                endTime: '09:00',
-                enabled: true
-            };
+                endTime: '09:00'
+            });
+        }
 
-            smartSchedules.push(schedule);
-            renderScheduleList();
-            updateActiveRoute();
-
-            alert('Schedule added! In a future version, you\'ll be able to edit schedules directly. For now, you can remove unwanted schedules and add new ones with different stations by reordering your favorites list.');
+        // Edit existing schedule
+        function editSchedule(index) {
+            editingScheduleIndex = index;
+            openScheduleModal(smartSchedules[index]);
         }
 
         // Remove schedule
@@ -674,6 +837,155 @@
             }
             return defaultValue || false;
         }
+
+        // Open schedule editor modal
+        function openScheduleModal(scheduleData) {
+            // Set modal title
+            var modalTitle = document.getElementById('modalTitle');
+            modalTitle.textContent = editingScheduleIndex === -1 ? 'Create Schedule' : 'Edit Schedule';
+
+            // Populate station dropdowns with favorite stations
+            populateStationDropdowns();
+
+            // Set form values
+            document.getElementById('editFromStation').value = scheduleData.fromId || '';
+            document.getElementById('editToStation').value = scheduleData.toId || '';
+            document.getElementById('editStartTime').value = scheduleData.startTime || '07:00';
+            document.getElementById('editEndTime').value = scheduleData.endTime || '09:00';
+
+            // Set days
+            editingScheduleDays = scheduleData.days ? scheduleData.days.slice() : [1, 2, 3, 4, 5];
+            updateDayButtons();
+
+            // Show modal
+            document.getElementById('scheduleModal').classList.add('active');
+        }
+
+        // Close schedule editor modal
+        function closeScheduleModal() {
+            document.getElementById('scheduleModal').classList.remove('active');
+            editingScheduleIndex = -1;
+            editingScheduleDays = [];
+        }
+
+        // Populate station dropdowns with favorite stations
+        function populateStationDropdowns() {
+            var fromSelect = document.getElementById('editFromStation');
+            var toSelect = document.getElementById('editToStation');
+
+            // Clear existing options except placeholder
+            fromSelect.innerHTML = '<option value="">Select station...</option>';
+            toSelect.innerHTML = '<option value="">Select station...</option>';
+
+            // Add favorite stations
+            for (var i = 0; i < favoriteStations.length; i++) {
+                var stationId = favoriteStations[i];
+                var stationName = getStationName(stationId);
+
+                var option1 = document.createElement('option');
+                option1.value = stationId;
+                option1.textContent = stationName;
+                fromSelect.appendChild(option1);
+
+                var option2 = document.createElement('option');
+                option2.value = stationId;
+                option2.textContent = stationName;
+                toSelect.appendChild(option2);
+            }
+        }
+
+        // Toggle day selection
+        function toggleDay(day) {
+            var index = editingScheduleDays.indexOf(day);
+            if (index !== -1) {
+                editingScheduleDays.splice(index, 1);
+            } else {
+                editingScheduleDays.push(day);
+            }
+            updateDayButtons();
+        }
+
+        // Update day button visual state
+        function updateDayButtons() {
+            var buttons = document.querySelectorAll('.day-btn');
+            for (var i = 0; i < buttons.length; i++) {
+                var btn = buttons[i];
+                var day = parseInt(btn.getAttribute('data-day'));
+                if (editingScheduleDays.indexOf(day) !== -1) {
+                    btn.classList.add('active');
+                } else {
+                    btn.classList.remove('active');
+                }
+            }
+        }
+
+        // Save schedule edit
+        function saveScheduleEdit() {
+            // Get form values
+            var fromId = document.getElementById('editFromStation').value;
+            var toId = document.getElementById('editToStation').value;
+            var startTime = document.getElementById('editStartTime').value;
+            var endTime = document.getElementById('editEndTime').value;
+
+            // Validation
+            if (!fromId || !toId) {
+                alert('Please select both from and to stations');
+                return;
+            }
+
+            if (fromId === toId) {
+                alert('From and To stations must be different');
+                return;
+            }
+
+            if (editingScheduleDays.length === 0) {
+                alert('Please select at least one day');
+                return;
+            }
+
+            if (!startTime || !endTime) {
+                alert('Please enter both start and end times');
+                return;
+            }
+
+            if (startTime >= endTime) {
+                alert('End time must be after start time');
+                return;
+            }
+
+            // Create schedule object
+            var schedule = {
+                id: editingScheduleIndex === -1 ? 'custom-' + Date.now() : smartSchedules[editingScheduleIndex].id,
+                fromId: fromId,
+                toId: toId,
+                days: editingScheduleDays.slice().sort(function(a, b) { return a - b; }),
+                startTime: startTime,
+                endTime: endTime,
+                enabled: true
+            };
+
+            // Save to array
+            if (editingScheduleIndex === -1) {
+                // Creating new schedule
+                smartSchedules.push(schedule);
+            } else {
+                // Updating existing schedule
+                smartSchedules[editingScheduleIndex] = schedule;
+            }
+
+            // Update UI
+            renderScheduleList();
+            updateActiveRoute();
+            closeScheduleModal();
+        }
+
+        // Close modal when clicking outside
+        document.addEventListener('click', function(e) {
+            var modal = document.getElementById('scheduleModal');
+            if (e.target === modal) {
+                closeScheduleModal();
+            }
+        });
 
         // Save configuration
         function saveConfig() {
