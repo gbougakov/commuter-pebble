@@ -22,9 +22,61 @@ var requestDebounceTimer = null;
 var DEBOUNCE_DELAY = 500; // milliseconds
 
 // Store current route and connection identifiers for detail requests
+// These are persisted to localStorage for continuity across app restarts
 var currentFromStation = '';
 var currentToStation = '';
 var connectionIdentifiers = []; // Array of {vehicle, departTime} for each departure
+
+// LocalStorage keys
+var STORAGE_KEY_FROM_STATION = 'nmbs_from_station';
+var STORAGE_KEY_TO_STATION = 'nmbs_to_station';
+var STORAGE_KEY_CONNECTIONS = 'nmbs_connections';
+
+// Load persisted data from localStorage
+function loadPersistedData() {
+    try {
+        var storedFrom = localStorage.getItem(STORAGE_KEY_FROM_STATION);
+        var storedTo = localStorage.getItem(STORAGE_KEY_TO_STATION);
+        var storedConnections = localStorage.getItem(STORAGE_KEY_CONNECTIONS);
+
+        if (storedFrom && STATION_IDS[storedFrom]) {
+            currentFromStation = storedFrom;
+            console.log('Loaded from station: ' + currentFromStation);
+        }
+
+        if (storedTo && STATION_IDS[storedTo]) {
+            currentToStation = storedTo;
+            console.log('Loaded to station: ' + currentToStation);
+        }
+
+        if (storedConnections) {
+            connectionIdentifiers = JSON.parse(storedConnections);
+            console.log('Loaded ' + connectionIdentifiers.length + ' connection identifiers');
+        }
+    } catch (e) {
+        console.log('Error loading persisted data: ' + e.message);
+        // Reset to defaults on error
+        currentFromStation = '';
+        currentToStation = '';
+        connectionIdentifiers = [];
+    }
+}
+
+// Save current data to localStorage
+function savePersistedData() {
+    try {
+        if (currentFromStation) {
+            localStorage.setItem(STORAGE_KEY_FROM_STATION, currentFromStation);
+        }
+        if (currentToStation) {
+            localStorage.setItem(STORAGE_KEY_TO_STATION, currentToStation);
+        }
+        localStorage.setItem(STORAGE_KEY_CONNECTIONS, JSON.stringify(connectionIdentifiers));
+        console.log('Persisted data saved');
+    } catch (e) {
+        console.log('Error saving persisted data: ' + e.message);
+    }
+}
 
 // Fetch train data from iRail API
 function fetchTrainData(fromStation, toStation) {
@@ -32,6 +84,9 @@ function fetchTrainData(fromStation, toStation) {
     currentFromStation = fromStation;
     currentToStation = toStation;
     connectionIdentifiers = [];
+
+    // Persist station selection to localStorage
+    savePersistedData();
     var fromId = STATION_IDS[fromStation];
     var toId = STATION_IDS[toStation];
 
@@ -158,11 +213,19 @@ function sendDeparture(connections, index) {
     }
     var isDirect = (viasNumber === 0) ? 1 : 0;
 
-    // Check platform change
+    // Get platform
     var platform = conn.departure.platform || '?';
-    var normalPlatform = (conn.departure.platforminfo && conn.departure.platforminfo.normal) ?
-        conn.departure.platforminfo.normal : platform;
-    var platformChanged = (platform !== normalPlatform) ? 1 : 0;
+
+    // Check platform change
+    // iRail API: platforminfo.normal == "0" means changed, "1" means no change
+    var platformChanged = 0;
+    if (conn.departure.platforminfo) {
+        console.log('Platform info: ' + JSON.stringify(conn.departure.platforminfo));
+        if (conn.departure.platforminfo.normal === "0") {
+            platformChanged = 1;
+        }
+    }
+    console.log('Platform changed: ' + platformChanged);
 
     // Calculate duration from conn.duration (in seconds)
     var durationSeconds = parseInt(conn.duration) || 0;
@@ -182,6 +245,11 @@ function sendDeparture(connections, index) {
         vehicle: conn.departure.vehicle || '',
         departTime: departTime
     };
+
+    // Persist connection identifiers (will save after each departure)
+    console.log('oy');
+    savePersistedData();
+    console.log('yo');
 
     // Build message (DESTINATION field now contains direction/terminus)
     var message = {
@@ -204,6 +272,7 @@ function sendDeparture(connections, index) {
     // Send message with callbacks
     Pebble.sendAppMessage(message, function () {
         // Success - send next departure
+        console.log('Departure ' + index + ' sent successfully');
         sendDeparture(connections, index + 1);
     }, function (e) {
         console.log('Failed to send departure ' + index + ': ' + e.error.message);
@@ -312,31 +381,158 @@ function fetchConnectionDetails(departureIndex) {
     xhr.send();
 }
 
-// Send full connection details to watch
+// Helper function to check if platform changed
+// iRail API: platforminfo.normal == "0" means changed, "1" means no change
+function checkPlatformChanged(departureOrArrival) {
+    if (!departureOrArrival.platforminfo) return 0;
+    return (departureOrArrival.platforminfo.normal === "0") ? 1 : 0;
+}
+
+// Send full connection details to watch (leg-by-leg)
 function sendConnectionDetail(conn, departureIndex) {
-    // Get actual destination
-    var destination = 'Unknown';
-    if (conn.arrival.stationinfo && conn.arrival.stationinfo.name) {
-        destination = conn.arrival.stationinfo.name;
+    console.log('Processing connection details...');
+
+    // Build leg array
+    var legs = [];
+
+    // Check if this is a direct connection or has vias
+    var viasNumber = 0;
+    if (conn.vias && conn.vias.number) {
+        viasNumber = parseInt(conn.vias.number) || 0;
     }
 
-    // Get direction
-    var direction = 'Unknown';
-    if (conn.departure.direction && conn.departure.direction.name) {
-        direction = conn.departure.direction.name;
+    if (viasNumber === 0) {
+        // Direct connection - single leg
+        var leg = {
+            departStation: conn.departure.stationinfo.name,
+            arriveStation: conn.arrival.stationinfo.name,
+            departTime: formatUnixTime(parseInt(conn.departure.time)),
+            arriveTime: formatUnixTime(parseInt(conn.arrival.time)),
+            departPlatform: conn.departure.platform || '?',
+            arrivePlatform: conn.arrival.platform || '?',
+            departDelay: Math.floor(parseInt(conn.departure.delay || 0) / 60),
+            arriveDelay: Math.floor(parseInt(conn.arrival.delay || 0) / 60),
+            vehicle: (conn.departure.vehicleinfo && conn.departure.vehicleinfo.shortname) || 'Unknown',
+            direction: (conn.departure.direction && conn.departure.direction.name) || 'Unknown',
+            stopCount: (conn.departure.stops && parseInt(conn.departure.stops.number)) || 0,
+            departPlatformChanged: checkPlatformChanged(conn.departure),
+            arrivePlatformChanged: checkPlatformChanged(conn.arrival)
+        };
+        legs.push(leg);
+    } else {
+        // Multi-leg connection with transfers
+        // First leg: departure → first via arrival
+        var firstVia = conn.vias.via[0];
+        var firstLeg = {
+            departStation: conn.departure.stationinfo.name,
+            arriveStation: firstVia.arrival.stationinfo.name,
+            departTime: formatUnixTime(parseInt(conn.departure.time)),
+            arriveTime: formatUnixTime(parseInt(firstVia.arrival.time)),
+            departPlatform: conn.departure.platform || '?',
+            arrivePlatform: firstVia.arrival.platform || '?',
+            departDelay: Math.floor(parseInt(conn.departure.delay || 0) / 60),
+            arriveDelay: Math.floor(parseInt(firstVia.arrival.delay || 0) / 60),
+            vehicle: (conn.departure.vehicleinfo && conn.departure.vehicleinfo.shortname) || 'Unknown',
+            direction: (conn.departure.direction && conn.departure.direction.name) || 'Unknown',
+            stopCount: (conn.departure.stops && parseInt(conn.departure.stops.number)) || 0,
+            departPlatformChanged: checkPlatformChanged(conn.departure),
+            arrivePlatformChanged: checkPlatformChanged(firstVia.arrival)
+        };
+        legs.push(firstLeg);
+
+        // Middle legs: via departure → next via arrival (or final arrival if last)
+        for (var i = 0; i < conn.vias.via.length; i++) {
+            var via = conn.vias.via[i];
+            var nextStation, nextTime, nextPlatform, nextDelay, nextPlatformChanged;
+
+            if (i < conn.vias.via.length - 1) {
+                // Next via exists
+                var nextVia = conn.vias.via[i + 1];
+                nextStation = nextVia.arrival.stationinfo.name;
+                nextTime = formatUnixTime(parseInt(nextVia.arrival.time));
+                nextPlatform = nextVia.arrival.platform || '?';
+                nextDelay = Math.floor(parseInt(nextVia.arrival.delay || 0) / 60);
+                nextPlatformChanged = checkPlatformChanged(nextVia.arrival);
+            } else {
+                // Last leg - goes to final arrival
+                nextStation = conn.arrival.stationinfo.name;
+                nextTime = formatUnixTime(parseInt(conn.arrival.time));
+                nextPlatform = conn.arrival.platform || '?';
+                nextDelay = Math.floor(parseInt(conn.arrival.delay || 0) / 60);
+                nextPlatformChanged = checkPlatformChanged(conn.arrival);
+            }
+
+            var leg = {
+                departStation: via.departure.stationinfo.name,
+                arriveStation: nextStation,
+                departTime: formatUnixTime(parseInt(via.departure.time)),
+                arriveTime: nextTime,
+                departPlatform: via.departure.platform || '?',
+                arrivePlatform: nextPlatform,
+                departDelay: Math.floor(parseInt(via.departure.delay || 0) / 60),
+                arriveDelay: nextDelay,
+                vehicle: (via.departure.vehicleinfo && via.departure.vehicleinfo.shortname) || 'Unknown',
+                direction: (via.departure.direction && via.departure.direction.name) || 'Unknown',
+                stopCount: (via.departure.stops && parseInt(via.departure.stops.number)) || 0,
+                departPlatformChanged: checkPlatformChanged(via.departure),
+                arrivePlatformChanged: nextPlatformChanged
+            };
+            legs.push(leg);
+        }
     }
 
-    // Send basic detail info
+    console.log('Built ' + legs.length + ' legs');
+
+    // Send leg count first
     Pebble.sendAppMessage({
         'MESSAGE_TYPE': MSG_SEND_DETAIL,
         'DEPARTURE_INDEX': departureIndex,
-        'DETAIL_DESTINATION': destination.substring(0, 31),
-        'DETAIL_DIRECTION': direction.substring(0, 31),
-        'VIA_COUNT': 0  // TODO: implement via stations
+        'LEG_COUNT': legs.length
     }, function () {
-        console.log('Detail sent for departure ' + departureIndex);
+        console.log('Leg count sent: ' + legs.length);
+        // Start sending individual legs
+        sendLeg(legs, 0);
     }, function (e) {
-        console.log('Failed to send detail: ' + e.error.message);
+        console.log('Failed to send leg count: ' + e.error.message);
+    });
+}
+
+// Send legs one at a time (recursive with callbacks)
+function sendLeg(legs, index) {
+    if (index >= legs.length) {
+        console.log('All legs sent');
+        return;
+    }
+
+    var leg = legs[index];
+
+    var message = {
+        'MESSAGE_TYPE': MSG_SEND_DETAIL,
+        'LEG_INDEX': index,
+        'LEG_DEPART_STATION': leg.departStation.substring(0, 31),
+        'LEG_ARRIVE_STATION': leg.arriveStation.substring(0, 31),
+        'LEG_DEPART_TIME': leg.departTime.substring(0, 7),
+        'LEG_ARRIVE_TIME': leg.arriveTime.substring(0, 7),
+        'LEG_DEPART_PLATFORM': leg.departPlatform.substring(0, 3),
+        'LEG_ARRIVE_PLATFORM': leg.arrivePlatform.substring(0, 3),
+        'LEG_DEPART_DELAY': leg.departDelay,
+        'LEG_ARRIVE_DELAY': leg.arriveDelay,
+        'LEG_VEHICLE': leg.vehicle.substring(0, 15),
+        'LEG_DIRECTION': leg.direction.substring(0, 31),
+        'LEG_STOP_COUNT': leg.stopCount,
+        'LEG_DEPART_PLATFORM_CHANGED': leg.departPlatformChanged,
+        'LEG_ARRIVE_PLATFORM_CHANGED': leg.arrivePlatformChanged
+    };
+
+    console.log('Sending leg ' + index + ': ' + leg.departStation + ' → ' + leg.arriveStation);
+
+    Pebble.sendAppMessage(message, function () {
+        // Success - send next leg
+        sendLeg(legs, index + 1);
+    }, function (e) {
+        console.log('Failed to send leg ' + index + ': ' + e.error.message);
+        // Try next one anyway
+        sendLeg(legs, index + 1);
     });
 }
 
@@ -372,4 +568,11 @@ Pebble.addEventListener('appmessage', function (e) {
 
 Pebble.addEventListener('ready', function () {
     console.log('PebbleKit JS ready!');
+
+    // Load persisted station selection and connection data
+    loadPersistedData();
+
+    if (currentFromStation && currentToStation) {
+        console.log('Restored session: ' + currentFromStation + ' -> ' + currentToStation);
+    }
 });

@@ -1,0 +1,29 @@
+<definitions>
+===== - spacer
+</definitions>
+
+<detail_screen>
+12:34 +2 ====== [1] // Departure time, delay, platform (filled if standard, outlined if changed)
+Leuven              // Departure station (larger text, replacing "Antwerpen/Anvers/Antwerp-" with "Antw-", "Brussels/Bruxelles/Brussel-" with "Bru-", "Charleroi-" with "Crl-", "Mechelen-" to "M-", "Liége-" to "L-", mind the dash, because "Mechelen" is a station, but "Mechelen-Nekkerspoel" should be shortened)
+| IC 1234 to L-Guill// Vehicle number and direction
+| 3 stops           // Stop count with a vertical dotted line on the left signifying a "trip"
+12:43 +2 ====== [2] // Arrival time, delay, platform (filled if standard, outlined if changed)
+Tienen              // Arrival station (larger text, replacing "Antwerpen/Anvers/Antwerp-" with "Antw-", "Brussels/Bruxelles/Brussel-" with "Bru-", "Charleroi-" with "Crl-", "Mechelen-" to "M-", "Liége-" to "L-", mind the dash, because "Mechelen" is a station, but "Mechelen-Nekkerspoel" should be shortened)
+</detail_screen>
+
+<detail_screen_with_connection>
+12:34 +2 ====== [1] // Departure time, delay, platform (filled if standard, outlined if changed)
+Leuven              // Departure station (larger text, replacing "Antwerpen/Anvers/Antwerp-" with "Antw-", "Brussels/Bruxelles/Brussel-" with "Bru-", "Charleroi-" with "Crl-", "Mechelen-" to "M-", "Liége-" to "L-", mind the dash, because "Mechelen" is a station, but "Mechelen-Nekkerspoel" should be shortened)
+| IC 1234 to L-Guill// Vehicle number and direction
+| 3 stops           // Stop count with a vertical dotted line on the left signifying a "trip"
+12:43 +2 ====== [2] // Arrival time, delay, platform (filled if standard, outlined if changed)
+Tienen              // Arrival (via) station (larger text, replacing "Antwerpen/Anvers/Antwerp-" with "Antw-", "Brussels/Bruxelles/Brussel-" with "Bru-", "Charleroi-" with "Crl-", "Mechelen-" to "M-", "Liége-" to "L-", mind the dash, because "Mechelen" is a station, but "Mechelen-Nekkerspoel" should be shortened)
+12:45 +2 ====== [1] // Departure time, delay, platform (filled if standard, outlined if changed)
+Alken               // Departure station (larger text, replacing "Antwerpen/Anvers/Antwerp-" with "Antw-", "Brussels/Bruxelles/Brussel-" with "Bru-", "Charleroi-" with "Crl-", "Mechelen-" to "M-", "Liége-" to "L-", mind the dash, because "Mechelen" is a station, but "Mechelen-Nekkerspoel" should be shortened)
+| S 1234 to Smwhere // Vehicle number and direction
+| 3 stops           // Stop count with a vertical dotted line on the left signifying a "trip"
+12:43 +2 ====== [2] // Arrival time, delay, platform (filled if standard, outlined if changed)
+Welkenraedt         // Arrival station (larger text, replacing "Antwerpen/Anvers/Antwerp-" with "Antw-", "Brussels/Bruxelles/Brussel-" with "Bru-", "Charleroi-" with "Crl-", "Mechelen-" to "M-", "Liége-" to "L-", mind the dash, because "Mechelen" is a station, but "Mechelen-Nekkerspoel" should be shortened)
+</detail_screen_with_connection>
+
+Note: connections should be repeated for multi-leg journeys with more than one layover

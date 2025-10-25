@@ -201,6 +201,50 @@ static const char* STATIONS[] = {
 };
 ```
 
+### LocalStorage Persistence
+
+Station selections and connection identifiers are persisted to localStorage to maintain continuity across app restarts and reconnections:
+
+```javascript
+// Storage keys
+var STORAGE_KEY_FROM_STATION = 'nmbs_from_station';
+var STORAGE_KEY_TO_STATION = 'nmbs_to_station';
+var STORAGE_KEY_CONNECTIONS = 'nmbs_connections';
+
+// Load on 'ready' event
+function loadPersistedData() {
+    var storedFrom = localStorage.getItem(STORAGE_KEY_FROM_STATION);
+    var storedTo = localStorage.getItem(STORAGE_KEY_TO_STATION);
+    var storedConnections = localStorage.getItem(STORAGE_KEY_CONNECTIONS);
+
+    if (storedFrom && STATION_IDS[storedFrom]) {
+        currentFromStation = storedFrom;
+    }
+    if (storedTo && STATION_IDS[storedTo]) {
+        currentToStation = storedTo;
+    }
+    if (storedConnections) {
+        connectionIdentifiers = JSON.parse(storedConnections);
+    }
+}
+
+// Save whenever data changes
+function savePersistedData() {
+    localStorage.setItem(STORAGE_KEY_FROM_STATION, currentFromStation);
+    localStorage.setItem(STORAGE_KEY_TO_STATION, currentToStation);
+    localStorage.setItem(STORAGE_KEY_CONNECTIONS, JSON.stringify(connectionIdentifiers));
+}
+```
+
+**When Data is Saved**:
+- When `fetchTrainData()` is called (station selection changes)
+- After each departure is sent (connection identifiers updated)
+
+**Benefits**:
+- User's station selection persists across watch app restarts
+- Connection identifiers remain available for detail requests even after phone app suspension
+- Graceful degradation: validates loaded data and resets to defaults on corruption
+
 ### API Request Debouncing
 
 To prevent excessive API calls during rapid station switching, requests are debounced with a 500ms delay:
@@ -252,7 +296,7 @@ Instead of sending all connection details upfront, the app stores identifiers an
 
 **Connection Identifier Storage** (src/pkjs/index.js):
 ```javascript
-// Store connection identifiers for detail requests
+// Store connection identifiers for detail requests (persisted to localStorage)
 var currentFromStation = '';
 var currentToStation = '';
 var connectionIdentifiers = []; // Array of {vehicle, departTime}
@@ -262,6 +306,9 @@ connectionIdentifiers[index] = {
   vehicle: conn.departure.vehicle || '',  // e.g., "BE.NMBS.IC1832"
   departTime: departTime                   // Unix timestamp
 };
+
+// Persist to localStorage after each update
+savePersistedData();
 ```
 
 **Detail Request Handler**:

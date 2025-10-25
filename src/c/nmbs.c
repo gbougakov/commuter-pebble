@@ -11,8 +11,9 @@ static Window *s_main_window;
 static MenuLayer *s_menu_layer;
 static StatusBarLayer *s_status_bar;
 static Window *s_detail_window;
+static StatusBarLayer *s_detail_status_bar;
 static ScrollLayer *s_detail_scroll_layer;
-static TextLayer *s_detail_text_layer;
+static Layer *s_detail_content_layer;
 
 // Resources
 static GBitmap *s_icon_switch;
@@ -30,10 +31,32 @@ static int16_t s_marquee_offset = 0;
 static uint16_t s_selected_row = 0;
 static int16_t s_marquee_max_offset = 0;
 
+// Journey leg data structure
+typedef struct {
+  char depart_station[32];
+  char arrive_station[32];
+  char depart_time[8];
+  char arrive_time[8];
+  char depart_platform[4];
+  char arrive_platform[4];
+  int8_t depart_delay;
+  int8_t arrive_delay;
+  char vehicle[16];        // e.g., "IC 1234"
+  char direction[32];
+  uint8_t stop_count;
+  bool depart_platform_changed;
+  bool arrive_platform_changed;
+} JourneyLeg;
+
+// Journey detail (collection of legs)
+typedef struct {
+  JourneyLeg legs[4];      // Max 3 connections = 4 legs
+  uint8_t leg_count;
+} JourneyDetail;
+
 // Detail window state
 static uint16_t s_selected_departure_index = 0;
-static char s_detail_destination[32] = "";
-static char s_detail_direction[32] = "";
+static JourneyDetail s_journey_detail;
 static bool s_detail_received = false;
 
 // Station data
@@ -53,6 +76,38 @@ static Station s_stations[] = {
 #define NUM_STATIONS (sizeof(s_stations) / sizeof(Station))
 static uint8_t s_from_station_index = 0;
 static uint8_t s_to_station_index = 1;
+
+// Helper function to abbreviate station names
+static void abbreviate_station_name(const char *input, char *output, size_t output_size) {
+  if (!input || !output || output_size == 0) return;
+
+  // Check for prefixes that need abbreviation
+  if (strstr(input, "Antwerp") || strstr(input, "Antwerpen") || strstr(input, "Anvers")) {
+    // Antwerp-Central → Antw-C, Antwerp-Berchem → Antw-Berchem
+    snprintf(output, output_size, "Antw%s", strchr(input, '-') ? strchr(input, '-') : "");
+  } else if (strstr(input, "Brussels") || strstr(input, "Brussel") || strstr(input, "Bruxelles")) {
+    // Special case: Brussels Airport-Zaventem → Bru-Airport
+    if (strstr(input, "Airport")) {
+      snprintf(output, output_size, "Bru-Airport");
+    } else {
+      // Brussels-Central → Bru-Central, Brussels-South → Bru-South
+      snprintf(output, output_size, "Bru%s", strchr(input, '-') ? strchr(input, '-') : "");
+    }
+  } else if (strncmp(input, "Charleroi-", 10) == 0) {
+    // Charleroi-South → Crl-South
+    snprintf(output, output_size, "Crl%s", strchr(input, '-'));
+  } else if (strncmp(input, "Mechelen-", 9) == 0) {
+    // Mechelen-Nekkerspoel → M-Nekkerspoel (but "Mechelen" stays as is)
+    snprintf(output, output_size, "M%s", strchr(input, '-'));
+  } else if (strncmp(input, "Liège-", 6) == 0 || strncmp(input, "Liége-", 6) == 0) {
+    // Liège-Guillemins → L-Guillemins
+    snprintf(output, output_size, "L%s", strchr(input, '-'));
+  } else {
+    // No abbreviation needed
+    strncpy(output, input, output_size - 1);
+    output[output_size - 1] = '\0';
+  }
+}
 
 // Message type constants (must match JavaScript)
 #define MSG_REQUEST_DATA 1
@@ -548,75 +603,203 @@ static void menu_select_callback(MenuLayer *menu_layer,
   // Push detail window onto stack
   const bool animated = true;
   window_stack_push(s_detail_window, animated);
-  
 }
 
-// Update detail window content
-static void update_detail_window(void) {
-  if (!s_detail_text_layer) return;
-
-  TrainDeparture *departure = &s_departures[s_selected_departure_index];
-  static char detail_buffer[300];
-
-  if (s_detail_received) {
-    // Show full details with direction and destination
-    snprintf(detail_buffer, sizeof(detail_buffer),
-             "Direction: %s\n\n"
-             "Destination: %s\n\n"
-             "🚂 %s Train\n\n"
-             "🕐 %s → %s\n"
-             "%s%s\n\n"
-             "🏁 Platform %s%s\n\n"
-             "⏱ Duration: %s\n"
-             "%s",
-             s_detail_direction,
-             s_detail_destination,
-             departure->train_type,
-             departure->depart_time,
-             departure->arrive_time,
-             (departure->depart_delay > 0 || departure->arrive_delay > 0) ?
-               "⚠️ Delayed!" : "✅ On time",
-             (departure->depart_delay > 0 || departure->arrive_delay > 0) ?
-               (departure->depart_delay > 0 && departure->arrive_delay > 0 ?
-                 " (both ways)" : "") : "",
-             departure->platform,
-             departure->platform_changed ? " ⚠️ CHANGED" : "",
-             departure->duration,
-             !departure->is_direct ?
-               "🔄 Connection required" : "➡️ Direct train"
-    );
-  } else {
-    // Show loading message while waiting for details
-    snprintf(detail_buffer, sizeof(detail_buffer),
-             "Loading connection details...\n\n"
-             "🚂 %s Train\n\n"
-             "🕐 %s → %s\n"
-             "%s%s\n\n"
-             "🏁 Platform %s%s\n\n"
-             "⏱ Duration: %s",
-             departure->train_type,
-             departure->depart_time,
-             departure->arrive_time,
-             (departure->depart_delay > 0 || departure->arrive_delay > 0) ?
-               "⚠️ Delayed!" : "✅ On time",
-             (departure->depart_delay > 0 || departure->arrive_delay > 0) ?
-               (departure->depart_delay > 0 && departure->arrive_delay > 0 ?
-                 " (both ways)" : "") : "",
-             departure->platform,
-             departure->platform_changed ? " ⚠️ CHANGED" : "",
-             departure->duration
-    );
+// Custom drawing function for detail window content
+static void detail_content_update_proc(Layer *layer, GContext *ctx) {
+  if (!s_detail_received) {
+    // Show loading message
+    graphics_context_set_text_color(ctx, GColorBlack);
+    graphics_draw_text(ctx,
+                       "Loading journey details...",
+                       fonts_get_system_font(FONT_KEY_GOTHIC_18_BOLD),
+                       GRect(8, 40, layer_get_bounds(layer).size.w - 16, 60),
+                       GTextOverflowModeWordWrap,
+                       GTextAlignmentCenter,
+                       NULL);
+    return;
   }
 
-  text_layer_set_text(s_detail_text_layer, detail_buffer);
+  // Draw each leg
+  int16_t y_offset = 8;
+  const int16_t margin = 8;
+  const int16_t platform_box_size = 16;
+  const int16_t line_height = 20;
+  const int16_t leg_spacing = 8;
 
-  // Update scroll layer content size
+  for (uint8_t i = 0; i < s_journey_detail.leg_count; i++) {
+    JourneyLeg *leg = &s_journey_detail.legs[i];
+
+    // Abbreviate station names
+    char depart_abbrev[32];
+    char arrive_abbrev[32];
+    abbreviate_station_name(leg->depart_station, depart_abbrev, sizeof(depart_abbrev));
+    abbreviate_station_name(leg->arrive_station, arrive_abbrev, sizeof(arrive_abbrev));
+
+    // Draw departure row - Time + delay
+    static char depart_time_str[16];
+    if (leg->depart_delay > 0) {
+      snprintf(depart_time_str, sizeof(depart_time_str), "%s +%d", leg->depart_time, leg->depart_delay);
+    } else {
+      snprintf(depart_time_str, sizeof(depart_time_str), "%s", leg->depart_time);
+    }
+
+    graphics_context_set_text_color(ctx, GColorBlack);
+    graphics_draw_text(ctx,
+                       depart_time_str,
+                       fonts_get_system_font(FONT_KEY_GOTHIC_18_BOLD),
+                       GRect(margin, y_offset, 80, line_height),
+                       GTextOverflowModeTrailingEllipsis,
+                       GTextAlignmentLeft,
+                       NULL);
+
+    // Platform box (departure)
+    GRect depart_platform_box = GRect(layer_get_bounds(layer).size.w - margin - platform_box_size,
+                                      y_offset + 2,
+                                      platform_box_size,
+                                      platform_box_size);
+
+    if (leg->depart_platform_changed) {
+      graphics_context_set_stroke_color(ctx, GColorBlack);
+      graphics_context_set_stroke_width(ctx, 1);
+      graphics_draw_round_rect(ctx, depart_platform_box, 2);
+      graphics_context_set_text_color(ctx, GColorBlack);
+    } else {
+      graphics_context_set_fill_color(ctx, GColorBlack);
+      graphics_fill_rect(ctx, depart_platform_box, 2, GCornersAll);
+      graphics_context_set_text_color(ctx, GColorWhite);
+    }
+
+    GRect platform_text_rect = depart_platform_box;
+    platform_text_rect.origin.y -= 2;
+    graphics_draw_text(ctx,
+                       leg->depart_platform,
+                       fonts_get_system_font(FONT_KEY_GOTHIC_14_BOLD),
+                       platform_text_rect,
+                       GTextOverflowModeTrailingEllipsis,
+                       GTextAlignmentCenter,
+                       NULL);
+
+    y_offset += line_height;
+
+    // Departure station name
+    graphics_context_set_text_color(ctx, GColorBlack);
+    graphics_draw_text(ctx,
+                       depart_abbrev,
+                       fonts_get_system_font(FONT_KEY_GOTHIC_18_BOLD),
+                       GRect(margin, y_offset, layer_get_bounds(layer).size.w - 2 * margin, line_height),
+                       GTextOverflowModeTrailingEllipsis,
+                       GTextAlignmentLeft,
+                       NULL);
+
+    y_offset += (line_height + 7);
+
+    // Journey line - Draw dotted vertical line
+    const int16_t line_x = margin + 2;
+    for (int16_t dot_y = y_offset; dot_y < y_offset + line_height * 2; dot_y += 4) {
+      graphics_context_set_fill_color(ctx, GColorBlack);
+      graphics_fill_rect(ctx, GRect(line_x, dot_y, 2, 2), 0, GCornerNone);
+    }
+
+    // Vehicle + direction text
+    static char vehicle_line[64];
+    snprintf(vehicle_line, sizeof(vehicle_line), "%s to %s", leg->vehicle, leg->direction);
+    graphics_draw_text(ctx,
+                       vehicle_line,
+                       fonts_get_system_font(FONT_KEY_GOTHIC_14),
+                       GRect(margin + 10, y_offset, layer_get_bounds(layer).size.w - 2 * margin - 10, line_height),
+                       GTextOverflowModeTrailingEllipsis,
+                       GTextAlignmentLeft,
+                       NULL);
+
+    y_offset += line_height;
+
+    // Stop count
+    static char stop_line[32];
+    snprintf(stop_line, sizeof(stop_line), "%d stop%s", leg->stop_count, leg->stop_count == 1 ? "" : "s");
+    graphics_draw_text(ctx,
+                       stop_line,
+                       fonts_get_system_font(FONT_KEY_GOTHIC_14),
+                       GRect(margin + 10, y_offset, layer_get_bounds(layer).size.w - 2 * margin - 10, line_height),
+                       GTextOverflowModeTrailingEllipsis,
+                       GTextAlignmentLeft,
+                       NULL);
+
+    y_offset += line_height;
+
+    // Draw arrival row - Time + delay
+    static char arrive_time_str[16];
+    if (leg->arrive_delay > 0) {
+      snprintf(arrive_time_str, sizeof(arrive_time_str), "%s +%d", leg->arrive_time, leg->arrive_delay);
+    } else {
+      snprintf(arrive_time_str, sizeof(arrive_time_str), "%s", leg->arrive_time);
+    }
+
+    graphics_context_set_text_color(ctx, GColorBlack);
+    graphics_draw_text(ctx,
+                       arrive_time_str,
+                       fonts_get_system_font(FONT_KEY_GOTHIC_18_BOLD),
+                       GRect(margin, y_offset, 80, line_height),
+                       GTextOverflowModeTrailingEllipsis,
+                       GTextAlignmentLeft,
+                       NULL);
+
+    // Platform box (arrival)
+    GRect arrive_platform_box = GRect(layer_get_bounds(layer).size.w - margin - platform_box_size,
+                                      y_offset + 2,
+                                      platform_box_size,
+                                      platform_box_size);
+
+    if (leg->arrive_platform_changed) {
+      graphics_context_set_stroke_color(ctx, GColorBlack);
+      graphics_context_set_stroke_width(ctx, 1);
+      graphics_draw_round_rect(ctx, arrive_platform_box, 2);
+      graphics_context_set_text_color(ctx, GColorBlack);
+    } else {
+      graphics_context_set_fill_color(ctx, GColorBlack);
+      graphics_fill_rect(ctx, arrive_platform_box, 2, GCornersAll);
+      graphics_context_set_text_color(ctx, GColorWhite);
+    }
+
+    platform_text_rect = arrive_platform_box;
+    platform_text_rect.origin.y -= 2;
+    graphics_draw_text(ctx,
+                       leg->arrive_platform,
+                       fonts_get_system_font(FONT_KEY_GOTHIC_14_BOLD),
+                       platform_text_rect,
+                       GTextOverflowModeTrailingEllipsis,
+                       GTextAlignmentCenter,
+                       NULL);
+
+    y_offset += line_height;
+
+    // Arrival station name
+    graphics_context_set_text_color(ctx, GColorBlack);
+    graphics_draw_text(ctx,
+                       arrive_abbrev,
+                       fonts_get_system_font(FONT_KEY_GOTHIC_18_BOLD),
+                       GRect(margin, y_offset, layer_get_bounds(layer).size.w - 2 * margin, line_height),
+                       GTextOverflowModeTrailingEllipsis,
+                       GTextAlignmentLeft,
+                       NULL);
+
+    y_offset += line_height + leg_spacing;
+  }
+}
+
+
+// Update detail window content (triggers redraw)
+static void update_detail_window(void) {
+  if (!s_detail_content_layer) return;
+
+  layer_mark_dirty(s_detail_content_layer);
+
   if (s_detail_scroll_layer) {
     Layer *window_layer = window_get_root_layer(s_detail_window);
     GRect bounds = layer_get_bounds(window_layer);
-    GSize text_size = text_layer_get_content_size(s_detail_text_layer);
-    text_layer_set_size(s_detail_text_layer, GSize(bounds.size.w - 16, text_size.h + 16));
-    scroll_layer_set_content_size(s_detail_scroll_layer, GSize(bounds.size.w, text_size.h + 24));
+    int16_t content_height = 16 + (s_journey_detail.leg_count * 128);
+    layer_set_frame(s_detail_content_layer, GRect(0, 0, bounds.size.w, content_height));
+    scroll_layer_set_content_size(s_detail_scroll_layer, GSize(bounds.size.w, content_height));
   }
 }
 
@@ -625,19 +808,27 @@ static void detail_window_load(Window *window) {
   Layer *window_layer = window_get_root_layer(window);
   GRect bounds = layer_get_bounds(window_layer);
 
+  // Create StatusBarLayer
+  s_detail_status_bar = status_bar_layer_create();
+  status_bar_layer_set_colors(s_detail_status_bar, GColorBlack, GColorWhite);
+  layer_add_child(window_layer, status_bar_layer_get_layer(s_detail_status_bar));
+
+  // Calculate bounds for ScrollLayer (below status bar)
+  int16_t status_bar_height = STATUS_BAR_LAYER_HEIGHT;
+  GRect scroll_bounds = bounds;
+  scroll_bounds.origin.y = status_bar_height;
+  scroll_bounds.size.h -= status_bar_height;
+
   // Create ScrollLayer
-  s_detail_scroll_layer = scroll_layer_create(bounds);
+  s_detail_scroll_layer = scroll_layer_create(scroll_bounds);
   scroll_layer_set_click_config_onto_window(s_detail_scroll_layer, window);
 
-  // Create TextLayer for detail content (large height for scrolling)
-  s_detail_text_layer = text_layer_create(GRect(8, 8, bounds.size.w - 16, 2000));
-  text_layer_set_text_color(s_detail_text_layer, GColorBlack);
-  text_layer_set_background_color(s_detail_text_layer, GColorClear);
-  text_layer_set_font(s_detail_text_layer, fonts_get_system_font(FONT_KEY_GOTHIC_18_BOLD));
-  text_layer_set_overflow_mode(s_detail_text_layer, GTextOverflowModeWordWrap);
+  // Create custom Layer for detail content (large height for scrolling)
+  s_detail_content_layer = layer_create(GRect(0, 0, scroll_bounds.size.w, 2000));
+  layer_set_update_proc(s_detail_content_layer, detail_content_update_proc);
 
-  // Add TextLayer to ScrollLayer
-  scroll_layer_add_child(s_detail_scroll_layer, text_layer_get_layer(s_detail_text_layer));
+  // Add content Layer to ScrollLayer
+  scroll_layer_add_child(s_detail_scroll_layer, s_detail_content_layer);
 
   // Add ScrollLayer to window
   layer_add_child(window_layer, scroll_layer_get_layer(s_detail_scroll_layer));
@@ -647,8 +838,9 @@ static void detail_window_load(Window *window) {
 }
 
 static void detail_window_unload(Window *window) {
-  text_layer_destroy(s_detail_text_layer);
+  layer_destroy(s_detail_content_layer);
   scroll_layer_destroy(s_detail_scroll_layer);
+  status_bar_layer_destroy(s_detail_status_bar);
 }
 
 // Main window lifecycle
@@ -792,26 +984,65 @@ static void inbox_received_callback(DictionaryIterator *iterator, void *context)
       layer_mark_dirty(menu_layer_get_layer(s_menu_layer));
     }
   } else if (message_type == MSG_SEND_DETAIL) {
-    // Received connection detail data
-    Tuple *dest = dict_find(iterator, MESSAGE_KEY_DETAIL_DESTINATION);
-    Tuple *dir = dict_find(iterator, MESSAGE_KEY_DETAIL_DIRECTION);
+    // Received connection detail data (leg-by-leg)
+    Tuple *leg_count_tuple = dict_find(iterator, MESSAGE_KEY_LEG_COUNT);
+    Tuple *leg_index_tuple = dict_find(iterator, MESSAGE_KEY_LEG_INDEX);
 
-    if (dest) {
-      strncpy(s_detail_destination, dest->value->cstring, sizeof(s_detail_destination) - 1);
-      s_detail_destination[sizeof(s_detail_destination) - 1] = '\0';
-    }
+    if (leg_count_tuple) {
+      // First message: leg count
+      s_journey_detail.leg_count = leg_count_tuple->value->uint8;
+      APP_LOG(APP_LOG_LEVEL_INFO, "Expecting %d legs", s_journey_detail.leg_count);
+    } else if (leg_index_tuple) {
+      // Subsequent messages: individual leg data
+      uint8_t leg_index = leg_index_tuple->value->uint8;
+      if (leg_index < 4) {  // Max 4 legs
+        JourneyLeg *leg = &s_journey_detail.legs[leg_index];
 
-    if (dir) {
-      strncpy(s_detail_direction, dir->value->cstring, sizeof(s_detail_direction) - 1);
-      s_detail_direction[sizeof(s_detail_direction) - 1] = '\0';
-    }
+        // Read all leg fields
+        Tuple *depart_station = dict_find(iterator, MESSAGE_KEY_LEG_DEPART_STATION);
+        Tuple *arrive_station = dict_find(iterator, MESSAGE_KEY_LEG_ARRIVE_STATION);
+        Tuple *depart_time = dict_find(iterator, MESSAGE_KEY_LEG_DEPART_TIME);
+        Tuple *arrive_time = dict_find(iterator, MESSAGE_KEY_LEG_ARRIVE_TIME);
+        Tuple *depart_platform = dict_find(iterator, MESSAGE_KEY_LEG_DEPART_PLATFORM);
+        Tuple *arrive_platform = dict_find(iterator, MESSAGE_KEY_LEG_ARRIVE_PLATFORM);
+        Tuple *depart_delay = dict_find(iterator, MESSAGE_KEY_LEG_DEPART_DELAY);
+        Tuple *arrive_delay = dict_find(iterator, MESSAGE_KEY_LEG_ARRIVE_DELAY);
+        Tuple *vehicle = dict_find(iterator, MESSAGE_KEY_LEG_VEHICLE);
+        Tuple *direction = dict_find(iterator, MESSAGE_KEY_LEG_DIRECTION);
+        Tuple *stop_count = dict_find(iterator, MESSAGE_KEY_LEG_STOP_COUNT);
+        Tuple *depart_platform_changed = dict_find(iterator, MESSAGE_KEY_LEG_DEPART_PLATFORM_CHANGED);
+        Tuple *arrive_platform_changed = dict_find(iterator, MESSAGE_KEY_LEG_ARRIVE_PLATFORM_CHANGED);
 
-    s_detail_received = true;
-    APP_LOG(APP_LOG_LEVEL_INFO, "Received details: %s -> %s", s_detail_direction, s_detail_destination);
+        // Copy string data
+        if (depart_station) strncpy(leg->depart_station, depart_station->value->cstring, sizeof(leg->depart_station) - 1);
+        if (arrive_station) strncpy(leg->arrive_station, arrive_station->value->cstring, sizeof(leg->arrive_station) - 1);
+        if (depart_time) strncpy(leg->depart_time, depart_time->value->cstring, sizeof(leg->depart_time) - 1);
+        if (arrive_time) strncpy(leg->arrive_time, arrive_time->value->cstring, sizeof(leg->arrive_time) - 1);
+        if (depart_platform) strncpy(leg->depart_platform, depart_platform->value->cstring, sizeof(leg->depart_platform) - 1);
+        if (arrive_platform) strncpy(leg->arrive_platform, arrive_platform->value->cstring, sizeof(leg->arrive_platform) - 1);
+        if (vehicle) strncpy(leg->vehicle, vehicle->value->cstring, sizeof(leg->vehicle) - 1);
+        if (direction) strncpy(leg->direction, direction->value->cstring, sizeof(leg->direction) - 1);
 
-    // Update detail window if it's currently shown
-    if (s_detail_window && window_stack_contains_window(s_detail_window)) {
-      update_detail_window();
+        // Copy numeric data
+        leg->depart_delay = depart_delay ? depart_delay->value->int8 : 0;
+        leg->arrive_delay = arrive_delay ? arrive_delay->value->int8 : 0;
+        leg->stop_count = stop_count ? stop_count->value->uint8 : 0;
+        leg->depart_platform_changed = depart_platform_changed ? (depart_platform_changed->value->uint8 != 0) : false;
+        leg->arrive_platform_changed = arrive_platform_changed ? (arrive_platform_changed->value->uint8 != 0) : false;
+
+        APP_LOG(APP_LOG_LEVEL_INFO, "Received leg %d: %s -> %s", leg_index, leg->depart_station, leg->arrive_station);
+
+        // If this is the last leg, mark as received and update UI
+        if (leg_index == s_journey_detail.leg_count - 1) {
+          s_detail_received = true;
+          APP_LOG(APP_LOG_LEVEL_INFO, "All legs received");
+
+          // Update detail window if it's currently shown
+          if (s_detail_window && window_stack_contains_window(s_detail_window)) {
+            update_detail_window();
+          }
+        }
+      }
     }
   }
 }

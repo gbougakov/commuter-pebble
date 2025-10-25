@@ -43,7 +43,22 @@
       "DETAIL_DIRECTION",
       "VIA_COUNT",
       "VIA_STATION",
-      "VIA_TIME"
+      "VIA_TIME",
+      "LEG_COUNT",
+      "LEG_INDEX",
+      "LEG_DEPART_STATION",
+      "LEG_ARRIVE_STATION",
+      "LEG_DEPART_TIME",
+      "LEG_ARRIVE_TIME",
+      "LEG_DEPART_PLATFORM",
+      "LEG_ARRIVE_PLATFORM",
+      "LEG_DEPART_DELAY",
+      "LEG_ARRIVE_DELAY",
+      "LEG_VEHICLE",
+      "LEG_DIRECTION",
+      "LEG_STOP_COUNT",
+      "LEG_DEPART_PLATFORM_CHANGED",
+      "LEG_ARRIVE_PLATFORM_CHANGED"
     ],
     "resources": {
       "media": [
