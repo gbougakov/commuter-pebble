@@ -970,6 +970,220 @@ pebble logs --emulator aplite | grep -E '(station|config|schedule)'
 ## VSCode IntelliSense
 The `.vscode/c_cpp_properties.json` configures paths to Pebble SDK headers for autocomplete. SDK location: `~/Library/Application Support/Pebble SDK/SDKs/4.5/`
 
+## AppGlances Integration
+
+### Overview
+The app supports AppGlances API for quick train schedule previews without opening the app. A background worker updates glances every 10 minutes, and glances are also refreshed whenever the app is opened or data is updated.
+
+### Architecture
+
+**Hybrid Update Strategy:**
+- **Background updates**: Worker ticks every 10 minutes, sends message to app, app fetches fresh data, updates glances, exits
+- **On-demand updates**: When user opens app or changes stations, glances update immediately with fresh data
+
+**Data Flow:**
+```
+Worker (every 10min) → Main App → JS (schedule eval + API) → Main App → AppGlance → Exit
+User opens app → Main App → JS (schedule eval + API) → Main App → AppGlance + UI update
+```
+
+### Components
+
+#### 1. Worker (worker_src/c/worker.c)
+- Ticks every `UPDATE_INTERVAL_MINUTES` (1 min for testing, 10 min for production)
+- Sends `WORKER_REQUEST_GLANCE` message to main app
+- Automatically detected by SDK via `worker_src` directory
+
+#### 2. Main App (src/c/nmbs.c)
+
+**Worker Message Handler:**
+```c
+static void worker_message_handler(uint16_t type, AppWorkerMessage *data) {
+  if (type == WORKER_REQUEST_GLANCE) {
+    s_is_background_update = true;
+    request_train_data();  // Reuses existing function!
+  }
+}
+```
+
+**Glance Update Callback:**
+```c
+static void update_app_glance(AppGlanceReloadSession *session, size_t limit, void *context) {
+  // Main slice: "Next: HH:MM" with train icon, expires at first train's departure
+  // Up to 8 train slices: "14:23 • IC • Plat 3 (+2)" with type-specific icons
+  // Each slice expires at its departure time via parse_departure_time()
+}
+```
+
+**Helper Functions:**
+```c
+// Convert "HH:MM" to Unix timestamp for today (or tomorrow if already passed)
+static time_t parse_departure_time(const char *time_str);
+
+// Map train type string to timeline icon ID
+static uint32_t get_train_type_icon(const char *train_type);
+```
+
+**Data Reception:**
+After receiving last departure from JS, app calls:
+```c
+app_glance_reload(update_app_glance, NULL);
+
+if (s_is_background_update) {
+  // Exit without showing UI
+} else {
+  // Update UI normally
+}
+```
+
+#### 3. JavaScript (src/pkjs/index.js)
+**No changes needed** - 100% code reuse of existing logic:
+- Schedule evaluation (`evaluateSchedules()`)
+- API fetching (`fetchTrainDataById()`)
+- Message protocol (`MSG_REQUEST_DATA`, `MSG_SEND_DEPARTURE`)
+
+### Platform Support
+
+**AppGlances available on:** Basalt, Chalk, Diorite, Emery (platforms with `PBL_HEALTH` define)
+**Not available on:** Aplite (SDK 2.x)
+
+Code is properly guarded with `#if defined(PBL_HEALTH)` preprocessor directives to compile on all platforms.
+
+### Timeline Icons
+
+**Note:** The current implementation does not use timeline icons in AppGlances. Icons are available in resources but not currently displayed:
+- `TIMELINE_TRAIN` (id: 1) - Generic train icon
+- `TIMELINE_IC` (id: 2) - IC train type icon
+- `TIMELINE_L` (id: 3) - L train type icon
+- `TIMELINE_S` (id: 4) - S train type icon
+- `TIMELINE_P` (id: 5) - P train type icon
+- `TIMELINE_NO_TRAINS` (id: 6) - Empty/error state icon
+
+Icons can be mapped at runtime via `get_train_type_icon()` helper function if needed in future.
+
+### Glance Layout
+
+**Simple Loop Architecture:**
+Each departure gets its own glance - no separation between "main" and "detail" slices. The app creates one `AppGlanceSlice` per train in a simple for loop:
+
+```c
+int max_slices = limit < s_num_departures ? limit : s_num_departures;
+
+for (int i = 0; i < max_slices; i++) {
+  TrainDeparture *dep = &s_departures[i];
+  // Format: "14:23 • Plat. 3 • Brussels-Central" or "14:23 (+5) • Plat. 3 • Brussels-Central"
+  // Expires at departure time
+}
+```
+
+**Train Glances:**
+- Format (on time): `"HH:MM • Plat. N • Destination"`
+  - Example: `"14:23 • Plat. 3 • Brussels-Central"`
+- Format (delayed): `"HH:MM (+delay) • Plat. N • Destination"`
+  - Example: `"14:23 (+5) • Plat. 3 • Brussels-Central"`
+- Expiration: Each glance expires at its train's departure time (self-cleaning)
+- Maximum: Limited by system `limit` parameter or number of departures, whichever is lower
+- Auto-rotation: As trains depart, their glances automatically expire and the next train's glance becomes visible
+
+**Empty State:**
+- Subtitle: `"No trains available"`
+- Expiration: 1 hour (allows worker to refresh and fetch new data)
+- Only shown when `s_num_departures == 0`
+
+### Message Protocol
+
+**New Message Type:**
+- `WORKER_REQUEST_GLANCE` (100): Worker → Main App requesting glance update
+
+**Reused Message Types:**
+- `MSG_REQUEST_DATA` (1): Main App → JS requesting train data
+- `MSG_SEND_COUNT` (3): JS → Main App sending departure count
+- `MSG_SEND_DEPARTURE` (2): JS → Main App sending each departure
+
+### Code Reuse
+
+**Achieved Zero Duplication:**
+- Schedule evaluation logic ✅
+- API fetching logic ✅
+- Data structures (`s_departures` array) ✅
+- Message protocol ✅
+- Error handling ✅
+
+**New Code (unavoidable):**
+- Glance rendering callback (~50 lines) - simple for loop, no icon mapping
+- Worker message handler (~5 lines)
+- Time parsing helper for expiration (~45 lines)
+- Platform guards
+
+**Total:** ~100 new lines vs ~2000+ reused lines = **~5% new code, 95% reuse**
+
+### Background Behavior
+
+**When worker triggers update:**
+1. Worker sends `WORKER_REQUEST_GLANCE` message
+2. Main app sets `s_is_background_update = true`
+3. Main app requests data from JS (reuses `request_train_data()`)
+4. JS evaluates schedules, fetches from iRail API
+5. JS sends departures back to main app
+6. Main app populates `s_departures` array
+7. Main app calls `app_glance_reload()`
+8. Main app exits (no UI shown)
+
+**Mode Flag:**
+- `s_is_background_update` distinguishes background updates from UI updates
+- When true: Skip UI updates, exit after glance update
+- When false: Update both glances and UI
+
+### Testing
+
+**Enable Worker Logging:**
+```bash
+pebble logs --emulator aplite
+```
+
+**Key Log Messages:**
+- `"Worker requesting glance update"` - Worker tick triggered
+- `"All departures received"` - Data ready for glance update
+- `"Updating AppGlance (limit: X, departures: Y)"` - Glance callback invoked
+- `"AppGlance updated with N train slices"` - Glances successfully updated
+- `"Background glance update complete, exiting"` - App exiting after background update
+
+**Testing Checklist:**
+1. ✅ Build succeeds for all platforms
+2. ✅ Worker launches and ticks
+3. ✅ Background updates trigger data fetch
+4. ✅ Glances update with correct data
+5. ✅ On-demand updates work when app is opened
+6. ✅ Empty state handled gracefully
+7. ✅ Icons display correctly
+8. ✅ Delays shown in glance subtitles
+
+### Configuration
+
+**Worker Update Interval:**
+Located in `worker_src/c/worker.c`:
+```c
+#define UPDATE_INTERVAL_MINUTES 1  // Set to 10 for production
+```
+
+**Glance Expiration:**
+Each train slice expires at its actual departure time - when a train at 14:30 departs, that glance automatically disappears. This ensures glances are always relevant and don't show departed trains.
+
+**Why this design:**
+- No hardcoded expiration intervals needed in nmbs.c
+- Worker update interval (in worker.c) is decoupled from glance lifetime
+- Glances are self-cleaning based on actual train schedules
+- If a train is delayed, the glance stays visible until the new departure time
+- More efficient - Pebble OS automatically removes expired glances
+
+### Implementation Notes
+
+**Platform Compatibility:**
+- AppGlances code is properly guarded with `#if defined(PBL_HEALTH)` preprocessor directives
+- Compiles successfully for all platforms: aplite, basalt, diorite
+- Only uses functions already present in the original codebase (`snprintf`, `time`, `strcmp`)
+- Avoided problematic libc functions (`sscanf`, `localtime`, `gmtime`) that cause linker issues on some platforms
+
 - Do not ever use basalt, test in aplite
 
 - Always document everything relevant in CLAUDE.md
