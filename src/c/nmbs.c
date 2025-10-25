@@ -5,6 +5,9 @@ static void detail_window_load(Window *window);
 static void detail_window_unload(Window *window);
 static void request_train_data(void);
 static void update_detail_window(void);
+#if defined(PBL_HEALTH)
+static void update_app_glance(AppGlanceReloadSession *session, size_t limit, void *context);
+#endif
 
 // UI elements
 static Window *s_main_window;
@@ -125,6 +128,9 @@ static void abbreviate_station_name(const char *input, char *output, size_t outp
 #define MSG_SEND_STATION 7
 #define MSG_SET_ACTIVE_ROUTE 8
 
+// Worker message type for glance updates
+#define WORKER_REQUEST_GLANCE 100
+
 // Maximum number of departures we can store
 #define MAX_DEPARTURES 11
 
@@ -147,6 +153,7 @@ static TrainDeparture s_departures[MAX_DEPARTURES];
 static uint8_t s_num_departures = 0;
 static bool s_data_loading = false;
 static bool s_data_failed = false;
+static bool s_is_background_update = false;
 
 // Marquee timer callback
 static void marquee_timer_callback(void *data) {
@@ -927,6 +934,114 @@ static void window_unload(Window *window) {
   status_bar_layer_destroy(s_status_bar);
 }
 
+// AppGlances helper functions (only on platforms with AppGlance support)
+#if defined(PBL_HEALTH)
+
+// Helper function: Convert "HH:MM" time string to Unix timestamp
+static time_t parse_departure_time(const char *time_str) {
+  // Parse HH:MM manually (avoid sscanf for platform compatibility)
+  int hours = 0, minutes = 0;
+  const char *p = time_str;
+
+  // Parse hours
+  while (*p && *p != ':') {
+    if (*p >= '0' && *p <= '9') {
+      hours = hours * 10 + (*p - '0');
+    }
+    p++;
+  }
+
+  // Parse minutes
+  if (*p == ':') p++;
+  while (*p) {
+    if (*p >= '0' && *p <= '9') {
+      minutes = minutes * 10 + (*p - '0');
+    }
+    p++;
+  }
+
+  // Get current time
+  time_t now = time(NULL);
+
+  // Convert to struct tm to manipulate
+  struct tm departure_tm = *gmtime(&now);
+
+  // Set to today at the departure time
+  departure_tm.tm_hour = hours;
+  departure_tm.tm_min = minutes;
+  departure_tm.tm_sec = 0;
+
+  // Convert back to time_t
+  time_t departure_time = mktime(&departure_tm);
+
+  // If departure time is in the past (already departed today), assume it's tomorrow
+  // This handles overnight trains or late-night updates
+  if (departure_time < now) {
+    departure_time += 24 * 60 * 60;  // Add 24 hours
+  }
+
+  return departure_time;
+}
+
+#endif  // PBL_HEALTH
+
+// AppGlance update callback (only on platforms with AppGlance support)
+#if defined(PBL_HEALTH)
+static void update_app_glance(AppGlanceReloadSession *session, size_t limit, void *context) {
+  APP_LOG(APP_LOG_LEVEL_INFO, "Updating AppGlance (limit: %zu, departures: %d)", limit, s_num_departures);
+
+  // Check if we have space for at least one slice
+  if (limit < 1) {
+    APP_LOG(APP_LOG_LEVEL_WARNING, "AppGlance limit too low: %zu", limit);
+    return;
+  }
+
+  // If no trains available
+  if (s_num_departures == 0) {
+    return;
+  }
+
+  // Add glances for each departure
+  int max_slices = limit < s_num_departures ? limit : s_num_departures;
+
+  for (int i = 0; i < max_slices; i++) {
+    TrainDeparture *dep = &s_departures[i];
+
+    char subtitle[80];
+    if (dep->depart_delay > 0) {
+      snprintf(subtitle, sizeof(subtitle), "%s (+%d) • Plat. %s • %s",
+               dep->depart_time, dep->depart_delay, dep->platform, dep->destination);
+    } else {
+      snprintf(subtitle, sizeof(subtitle), "%s • Plat. %s • %s",
+               dep->depart_time, dep->platform, dep->destination);
+    }
+
+    AppGlanceSlice slice = {
+      .layout = {
+        .subtitle_template_string = subtitle
+      },
+      .expiration_time = parse_departure_time(dep->depart_time)
+    };
+
+    AppGlanceResult result = app_glance_add_slice(session, slice);
+    if (result != APP_GLANCE_RESULT_SUCCESS) {
+      APP_LOG(APP_LOG_LEVEL_ERROR, "Failed to add train slice %d: %d", i, result);
+    }
+  }
+
+  APP_LOG(APP_LOG_LEVEL_INFO, "AppGlance updated with %d train slices", max_slices);
+}
+#endif  // PBL_HEALTH
+
+// Worker message handler
+static void worker_message_handler(uint16_t type, AppWorkerMessage *data) {
+  if (type == WORKER_REQUEST_GLANCE) {
+    APP_LOG(APP_LOG_LEVEL_INFO, "Worker requesting glance update");
+    s_is_background_update = true;
+    request_train_data();  // Reuse existing function!
+  }
+}
+
 // Request train data from JavaScript
 static void request_train_data(void) {
   if (s_num_stations == 0) {
@@ -1018,9 +1133,22 @@ static void inbox_received_callback(DictionaryIterator *iterator, void *context)
     if (index == s_num_departures - 1) {
       s_data_loading = false;
       APP_LOG(APP_LOG_LEVEL_INFO, "All departures received");
-      // Reload menu data to update row count and scrolling
-      menu_layer_reload_data(s_menu_layer);
-    } else {
+
+      // Update glances with fresh data (only on platforms with AppGlance support)
+      #if defined(PBL_HEALTH)
+        app_glance_reload(update_app_glance, NULL);
+      #endif
+
+      if (s_is_background_update) {
+        // Background update - don't show UI, just exit
+        APP_LOG(APP_LOG_LEVEL_INFO, "Background glance update complete, exiting");
+        s_is_background_update = false;
+        // App will exit naturally when window stack is empty
+      } else {
+        // Normal update - refresh UI
+        menu_layer_reload_data(s_menu_layer);
+      }
+    } else{
       layer_mark_dirty(menu_layer_get_layer(s_menu_layer));
     }
   } else if (message_type == MSG_SEND_DETAIL) {
@@ -1216,6 +1344,9 @@ static void init(void) {
   // Open AppMessage with appropriate buffer sizes
   app_message_open(512, 512);
 
+  // Subscribe to worker messages for background glance updates
+  app_worker_message_subscribe(worker_message_handler);
+
   // Don't request data immediately - wait for JavaScript to be ready
   // JavaScript will send stations or we'll use defaults, then request data
   APP_LOG(APP_LOG_LEVEL_DEBUG, "NMBS Schedule App initialized");
@@ -1232,6 +1363,19 @@ static void deinit(void) {
   gbitmap_destroy(s_icon_start_white);
   gbitmap_destroy(s_icon_finish);
   gbitmap_destroy(s_icon_finish_white);
+
+  // Update glances before exiting (only on platforms with AppGlance support)
+  #if defined(PBL_HEALTH)
+    if (s_num_departures > 0) {
+      APP_LOG(APP_LOG_LEVEL_INFO, "Updating glances on app exit (departures: %d)", s_num_departures);
+      app_glance_reload(update_app_glance, NULL);
+    } else {
+      APP_LOG(APP_LOG_LEVEL_INFO, "No departures to show in glances");
+    }
+  #endif
+
+  // Unsubscribe from worker messages
+  app_worker_message_unsubscribe();
 
   // Destroy main window
   window_destroy(s_main_window);

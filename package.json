@@ -14,7 +14,6 @@
       "configurable"
     ],
     "targetPlatforms": [
-      "aplite",
       "basalt",
       "diorite"
     ],
@@ -66,7 +65,8 @@
       "CONFIG_STATION_NAME",
       "CONFIG_STATION_IRAIL_ID",
       "CONFIG_FROM_INDEX",
-      "CONFIG_TO_INDEX"
+      "CONFIG_TO_INDEX",
+      "WORKER_REQUEST_GLANCE"
     ],
     "resources": {
       "media": [
