@@ -1,13 +1,13 @@
 {
-  "name": "nmbs",
-  "author": "MakeAwesomeHappen",
-  "version": "1.0.0",
+  "name": "commuter",
+  "author": "Werknaam",
+  "version": "1.1.0",
   "keywords": ["pebble-app"],
   "private": true,
   "dependencies": {},
   "pebble": {
-    "displayName": "nmbs",
-    "uuid": "0a2adab1-0081-4e7b-9e3f-d2b47b9c9409",
+    "displayName": "Commuter",
+    "uuid": "be76f72c-00d6-4ee2-a7ad-a29c74081283",
     "sdkVersion": "3",
     "enableMultiJS": true,
     "capabilities": [
@@ -16,10 +16,7 @@
     "targetPlatforms": [
       "aplite",
       "basalt",
-      "chalk",
-      "diorite",
-      "emery",
-      "flint"
+      "diorite"
     ],
     "watchapp": {
       "watchface": false
@@ -112,6 +109,12 @@
           "type": "bitmap",
           "name": "ICON_FINISH_WHITE",
           "file": "finish_white.png"
+        },
+        {
+          "type": "png",
+          "name": "IMAGE_MENU_ICON",
+          "file": "icon.png",
+          "menuIcon": true
         }
       ]
     }

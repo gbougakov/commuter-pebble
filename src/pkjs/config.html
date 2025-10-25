@@ -385,9 +385,50 @@
             padding: 20px;
             color: #6c757d;
         }
+
+        .toast {
+            position: fixed;
+            top: 16px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #dc3545;
+            color: white;
+            padding: 12px 20px;
+            border-radius: 6px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+            z-index: 3000;
+            max-width: 90%;
+            font-size: 14px;
+            line-height: 1.4;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            pointer-events: none;
+        }
+
+        .toast.show {
+            opacity: 1;
+        }
+
+        .error-message {
+            color: #dc3545;
+            font-size: 13px;
+            margin-top: 4px;
+            display: none;
+        }
+
+        .error-message.show {
+            display: block;
+        }
+
+        .form-group.error select,
+        .form-group.error input {
+            border-color: #dc3545;
+        }
     </style>
 </head>
 <body>
+    <!-- Toast notification -->
+    <div class="toast" id="toast"></div>
     <div class="header">
         <h1>🚂 NMBS Configuration</h1>
         <div class="subtitle">Customize stations and schedules</div>
@@ -413,25 +454,10 @@
     <div class="section">
         <div class="section-header">⏱️ Smart Schedules</div>
         <div class="section-content">
-            <div class="mode-toggle">
-                <button class="mode-btn active" id="modeSimple" onclick="switchMode('simple')">Simple</button>
-                <button class="mode-btn" id="modeAdvanced" onclick="switchMode('advanced')">Advanced</button>
+            <div class="schedule-list" id="scheduleList">
+                <!-- Schedules will be listed here -->
             </div>
-
-            <!-- Simple Mode -->
-            <div id="simpleMode">
-                <div class="simple-templates" id="templateList">
-                    <!-- Templates will be added here -->
-                </div>
-            </div>
-
-            <!-- Advanced Mode -->
-            <div id="advancedMode" class="hidden">
-                <div class="schedule-list" id="scheduleList">
-                    <!-- Schedules will be listed here -->
-                </div>
-                <button class="btn btn-primary" onclick="addSchedule()">+ Add Schedule</button>
-            </div>
+            <button class="btn btn-primary" onclick="addSchedule()">+ Add Schedule</button>
         </div>
     </div>
 
@@ -447,21 +473,23 @@
                 <button class="modal-close" onclick="closeScheduleModal()">&times;</button>
             </div>
             <div class="modal-body">
-                <div class="form-group">
+                <div class="form-group" id="formGroupFrom">
                     <label class="form-label">From Station</label>
                     <select id="editFromStation">
                         <option value="">Select station...</option>
                     </select>
+                    <div class="error-message" id="errorFrom"></div>
                 </div>
 
-                <div class="form-group">
+                <div class="form-group" id="formGroupTo">
                     <label class="form-label">To Station</label>
                     <select id="editToStation">
                         <option value="">Select station...</option>
                     </select>
+                    <div class="error-message" id="errorTo"></div>
                 </div>
 
-                <div class="form-group">
+                <div class="form-group" id="formGroupDays">
                     <label class="form-label">Days</label>
                     <div class="day-selector">
                         <button type="button" class="day-btn" data-day="1" onclick="toggleDay(1)">Mon</button>
@@ -472,9 +500,10 @@
                         <button type="button" class="day-btn" data-day="6" onclick="toggleDay(6)">Sat</button>
                         <button type="button" class="day-btn" data-day="0" onclick="toggleDay(0)">Sun</button>
                     </div>
+                    <div class="error-message" id="errorDays"></div>
                 </div>
 
-                <div class="form-group">
+                <div class="form-group" id="formGroupTime">
                     <label class="form-label">Start Time</label>
                     <input type="time" id="editStartTime" value="07:00">
                 </div>
@@ -482,6 +511,7 @@
                 <div class="form-group">
                     <label class="form-label">End Time</label>
                     <input type="time" id="editEndTime" value="09:00">
+                    <div class="error-message" id="errorTime"></div>
                 </div>
             </div>
             <div class="modal-footer">
@@ -496,7 +526,6 @@
         var stationCache = [];
         var favoriteStations = [];
         var smartSchedules = [];
-        var currentMode = 'simple';
         var maxStations = 6;
 
         // Schedule editor state
@@ -505,6 +534,51 @@
 
         // Day names
         var dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+        // Toast notification
+        var toastTimer = null;
+        function showToast(message) {
+            var toast = document.getElementById('toast');
+            toast.textContent = message;
+            toast.classList.add('show');
+
+            if (toastTimer) {
+                clearTimeout(toastTimer);
+            }
+
+            toastTimer = setTimeout(function() {
+                toast.classList.remove('show');
+            }, 3000);
+        }
+
+        // Show inline error
+        function showError(fieldId, message) {
+            var errorEl = document.getElementById('error' + fieldId);
+            var formGroup = document.getElementById('formGroup' + fieldId);
+
+            if (errorEl) {
+                errorEl.textContent = message;
+                errorEl.classList.add('show');
+            }
+
+            if (formGroup) {
+                formGroup.classList.add('error');
+            }
+        }
+
+        // Clear all errors
+        function clearErrors() {
+            var errors = document.querySelectorAll('.error-message');
+            for (var i = 0; i < errors.length; i++) {
+                errors[i].classList.remove('show');
+                errors[i].textContent = '';
+            }
+
+            var formGroups = document.querySelectorAll('.form-group');
+            for (var j = 0; j < formGroups.length; j++) {
+                formGroups[j].classList.remove('error');
+            }
+        }
 
         // Initialize
         window.onload = function() {
@@ -569,8 +643,6 @@
                     console.log('Loaded ' + smartSchedules.length + ' smart schedules');
                     renderScheduleList();
                 }
-
-                renderSimpleTemplates();
             } catch (e) {
                 console.log('Error loading config: ' + e.message);
             }
@@ -642,68 +714,6 @@
             }
         });
 
-        // Switch between simple and advanced modes
-        function switchMode(mode) {
-            currentMode = mode;
-            document.getElementById('modeSimple').classList.toggle('active', mode === 'simple');
-            document.getElementById('modeAdvanced').classList.toggle('active', mode === 'advanced');
-            document.getElementById('simpleMode').classList.toggle('hidden', mode !== 'simple');
-            document.getElementById('advancedMode').classList.toggle('hidden', mode !== 'advanced');
-        }
-
-        // Render simple mode templates
-        function renderSimpleTemplates() {
-            var html = '';
-            html += '<button class="template-btn" onclick="addTemplateSchedule(\'morning-commute\')">🌅 Morning Commute (Weekdays 6:00-12:00)</button>';
-            html += '<button class="template-btn" onclick="addTemplateSchedule(\'evening-return\')">🌆 Evening Return (Weekdays 12:00-23:59)</button>';
-            html += '<button class="template-btn" onclick="addTemplateSchedule(\'weekend\')">🎉 Weekend Route (Sat-Sun All Day)</button>';
-            document.getElementById('templateList').innerHTML = html;
-        }
-
-        // Add template schedule
-        function addTemplateSchedule(template) {
-            // Check if user has selected favorite stations
-            if (favoriteStations.length < 2) {
-                alert('Please select at least 2 favorite stations first!');
-                return;
-            }
-
-            // Use first two favorite stations as defaults
-            var fromId = favoriteStations[0];
-            var toId = favoriteStations[1];
-
-            var schedule = {
-                id: template + '-' + Date.now(),
-                fromId: fromId,
-                toId: toId,
-                enabled: true
-            };
-
-            if (template === 'morning-commute') {
-                schedule.days = [1, 2, 3, 4, 5];  // Mon-Fri
-                schedule.startTime = '06:00';
-                schedule.endTime = '12:00';
-            } else if (template === 'evening-return') {
-                schedule.days = [1, 2, 3, 4, 5];  // Mon-Fri
-                schedule.startTime = '12:00';
-                schedule.endTime = '23:59';
-                // Swap from/to for return journey
-                schedule.fromId = toId;
-                schedule.toId = fromId;
-            } else if (template === 'weekend') {
-                schedule.days = [0, 6];  // Sat-Sun
-                schedule.startTime = '00:00';
-                schedule.endTime = '23:59';
-            }
-
-            smartSchedules.push(schedule);
-            renderScheduleList();
-            updateActiveRoute();
-
-            // Switch to advanced mode to show the new schedule
-            switchMode('advanced');
-        }
-
         // Render schedule list (advanced mode)
         function renderScheduleList() {
             var html = '';
@@ -760,7 +770,7 @@
         // Add new schedule
         function addSchedule() {
             if (favoriteStations.length < 2) {
-                alert('Please select at least 2 favorite stations first!');
+                showToast('Please select at least 2 favorite stations first');
                 return;
             }
 
@@ -783,10 +793,9 @@
 
         // Remove schedule
         function removeSchedule(index) {
-            if (confirm('Remove this schedule?')) {
-                smartSchedules.splice(index, 1);
-                renderScheduleList();
-            }
+            smartSchedules.splice(index, 1);
+            renderScheduleList();
+            updateActiveRoute();
         }
 
         // Update active route display
@@ -840,6 +849,9 @@
 
         // Open schedule editor modal
         function openScheduleModal(scheduleData) {
+            // Clear any previous errors
+            clearErrors();
+
             // Set modal title
             var modalTitle = document.getElementById('modalTitle');
             modalTitle.textContent = editingScheduleIndex === -1 ? 'Create Schedule' : 'Edit Schedule';
@@ -921,35 +933,47 @@
 
         // Save schedule edit
         function saveScheduleEdit() {
+            // Clear previous errors
+            clearErrors();
+
             // Get form values
             var fromId = document.getElementById('editFromStation').value;
             var toId = document.getElementById('editToStation').value;
             var startTime = document.getElementById('editStartTime').value;
             var endTime = document.getElementById('editEndTime').value;
 
-            // Validation
-            if (!fromId || !toId) {
-                alert('Please select both from and to stations');
-                return;
+            // Validation with error messages
+            var hasError = false;
+
+            if (!fromId) {
+                showError('From', 'Please select a departure station');
+                hasError = true;
             }
 
-            if (fromId === toId) {
-                alert('From and To stations must be different');
-                return;
+            if (!toId) {
+                showError('To', 'Please select an arrival station');
+                hasError = true;
+            }
+
+            if (fromId && toId && fromId === toId) {
+                showError('To', 'Stations must be different');
+                hasError = true;
             }
 
             if (editingScheduleDays.length === 0) {
-                alert('Please select at least one day');
-                return;
+                showError('Days', 'Please select at least one day');
+                hasError = true;
             }
 
             if (!startTime || !endTime) {
-                alert('Please enter both start and end times');
-                return;
+                showError('Time', 'Please enter both start and end times');
+                hasError = true;
+            } else if (startTime >= endTime) {
+                showError('Time', 'End time must be after start time');
+                hasError = true;
             }
 
-            if (startTime >= endTime) {
-                alert('End time must be after start time');
+            if (hasError) {
                 return;
             }
 
@@ -990,7 +1014,7 @@
         // Save configuration
         function saveConfig() {
             if (favoriteStations.length === 0) {
-                alert('Please select at least one favorite station');
+                showToast('Please select at least one favorite station');
                 return;
             }
 
