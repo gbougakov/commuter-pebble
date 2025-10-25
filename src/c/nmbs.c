@@ -61,21 +61,27 @@ static bool s_detail_received = false;
 
 // Station data
 typedef struct {
-  char *name;
-  char *code;  // Short code for display
+  char name[64];        // Display name (e.g., "Brussels-Central")
+  char irail_id[32];    // iRail ID (e.g., "BE.NMBS.008813003")
 } Station;
 
-static Station s_stations[] = {
-  {"Brussels-Central", "BXL-C"},
-  {"Antwerp-Central", "ANT-C"},
-  {"Ghent-Sint-Pieters", "GNT-SP"},
-  {"Liège-Guillemins", "LGE-G"},
-  {"Leuven", "LEU"}
-};
-
-#define NUM_STATIONS (sizeof(s_stations) / sizeof(Station))
+// Dynamic station list (populated from JavaScript config)
+#define MAX_FAVORITE_STATIONS 6
+static Station s_stations[MAX_FAVORITE_STATIONS];
+static uint8_t s_num_stations = 0;
 static uint8_t s_from_station_index = 0;
 static uint8_t s_to_station_index = 1;
+static bool s_stations_received = false;
+
+// Default fallback stations (if no config received)
+static const Station DEFAULT_STATIONS[] = {
+  {"Brussels-Central", "BE.NMBS.008813003"},
+  {"Antwerp-Central", "BE.NMBS.008821006"},
+  {"Ghent-Sint-Pieters", "BE.NMBS.008892007"},
+  {"Liège-Guillemins", "BE.NMBS.008841004"},
+  {"Leuven", "BE.NMBS.008833001"}
+};
+#define NUM_DEFAULT_STATIONS (sizeof(DEFAULT_STATIONS) / sizeof(Station))
 
 // Helper function to abbreviate station names
 static void abbreviate_station_name(const char *input, char *output, size_t output_size) {
@@ -115,6 +121,9 @@ static void abbreviate_station_name(const char *input, char *output, size_t outp
 #define MSG_SEND_COUNT 3
 #define MSG_REQUEST_DETAILS 4
 #define MSG_SEND_DETAIL 5
+#define MSG_SEND_STATION_COUNT 6
+#define MSG_SEND_STATION 7
+#define MSG_SET_ACTIVE_ROUTE 8
 
 // Maximum number of departures we can store
 #define MAX_DEPARTURES 11
@@ -137,6 +146,7 @@ typedef struct {
 static TrainDeparture s_departures[MAX_DEPARTURES];
 static uint8_t s_num_departures = 0;
 static bool s_data_loading = false;
+static bool s_data_failed = false;
 
 // Marquee timer callback
 static void marquee_timer_callback(void *data) {
@@ -166,7 +176,11 @@ static uint16_t menu_get_num_rows_callback(MenuLayer *menu_layer,
   if (section_index == 0) {
     return 2;  // "From" and "To" selectors
   } else {
-    return s_data_loading ? 1 : s_num_departures;  // Train departures or loading indicator
+    // Show 1 row for loading, error, or when no departures
+    if (s_data_loading || s_data_failed || s_num_departures == 0) {
+      return 1;
+    }
+    return s_num_departures;
   }
 }
 
@@ -228,11 +242,11 @@ static void menu_draw_row_callback(GContext *ctx,
     if (cell_index->row == 0) {
       // "From" station selector - use start icon
       icon = selected ? s_icon_start_white : s_icon_start;
-      station_name = s_stations[s_from_station_index].name;
+      station_name = (s_num_stations > 0) ? s_stations[s_from_station_index].name : "Loading...";
     } else {
       // "To" station selector - use finish icon
       icon = selected ? s_icon_finish_white : s_icon_finish;
-      station_name = s_stations[s_to_station_index].name;
+      station_name = (s_num_stations > 0) ? s_stations[s_to_station_index].name : "Loading...";
     }
 
     // Draw icon (16x16) with some padding
@@ -264,6 +278,21 @@ static void menu_draw_row_callback(GContext *ctx,
     graphics_context_set_text_color(ctx, text_color);
     graphics_draw_text(ctx,
                        "Loading trains...",
+                       fonts_get_system_font(FONT_KEY_GOTHIC_18_BOLD),
+                       GRect(4, 10, bounds.size.w - 8, 24),
+                       GTextOverflowModeTrailingEllipsis,
+                       GTextAlignmentCenter,
+                       NULL);
+    return;
+  }
+
+  // Show error if load failed
+  if (s_data_failed) {
+    bool selected = menu_cell_layer_is_highlighted(cell_layer);
+    GColor text_color = selected ? GColorWhite : GColorBlack;
+    graphics_context_set_text_color(ctx, text_color);
+    graphics_draw_text(ctx,
+                       "Connection failed",
                        fonts_get_system_font(FONT_KEY_GOTHIC_18_BOLD),
                        GRect(4, 10, bounds.size.w - 8, 24),
                        GTextOverflowModeTrailingEllipsis,
@@ -560,16 +589,21 @@ static void menu_select_callback(MenuLayer *menu_layer,
                                   void *context) {
   // Section 0: Station selectors
   if (cell_index->section == 0) {
+    if (s_num_stations == 0) {
+      APP_LOG(APP_LOG_LEVEL_WARNING, "No stations loaded yet");
+      return;
+    }
+
     if (cell_index->row == 0) {
       // "From" station selector
-      s_from_station_index = (s_from_station_index + 1) % NUM_STATIONS;
+      s_from_station_index = (s_from_station_index + 1) % s_num_stations;
       layer_mark_dirty(menu_layer_get_layer(s_menu_layer));
       APP_LOG(APP_LOG_LEVEL_INFO, "From station changed to: %s", s_stations[s_from_station_index].name);
       // Request new data
       request_train_data();
     } else {
       // "To" station selector
-      s_to_station_index = (s_to_station_index + 1) % NUM_STATIONS;
+      s_to_station_index = (s_to_station_index + 1) % s_num_stations;
       layer_mark_dirty(menu_layer_get_layer(s_menu_layer));
       APP_LOG(APP_LOG_LEVEL_INFO, "To station changed to: %s", s_stations[s_to_station_index].name);
       // Request new data
@@ -797,7 +831,7 @@ static void update_detail_window(void) {
   if (s_detail_scroll_layer) {
     Layer *window_layer = window_get_root_layer(s_detail_window);
     GRect bounds = layer_get_bounds(window_layer);
-    int16_t content_height = 16 + (s_journey_detail.leg_count * 128);
+    int16_t content_height = 24 + (s_journey_detail.leg_count * 128);
     layer_set_frame(s_detail_content_layer, GRect(0, 0, bounds.size.w, content_height));
     scroll_layer_set_content_size(s_detail_scroll_layer, GSize(bounds.size.w, content_height));
   }
@@ -895,16 +929,22 @@ static void window_unload(Window *window) {
 
 // Request train data from JavaScript
 static void request_train_data(void) {
+  if (s_num_stations == 0) {
+    APP_LOG(APP_LOG_LEVEL_WARNING, "Cannot request data: no stations loaded");
+    return;
+  }
+
   DictionaryIterator *iter;
   app_message_outbox_begin(&iter);
 
   dict_write_uint8(iter, MESSAGE_KEY_MESSAGE_TYPE, MSG_REQUEST_DATA);
-  dict_write_cstring(iter, MESSAGE_KEY_FROM_STATION, s_stations[s_from_station_index].name);
-  dict_write_cstring(iter, MESSAGE_KEY_TO_STATION, s_stations[s_to_station_index].name);
+  dict_write_cstring(iter, MESSAGE_KEY_FROM_STATION_ID, s_stations[s_from_station_index].irail_id);
+  dict_write_cstring(iter, MESSAGE_KEY_TO_STATION_ID, s_stations[s_to_station_index].irail_id);
 
   app_message_outbox_send();
 
   s_data_loading = true;
+  s_data_failed = false;  // Clear error flag on new request
   s_num_departures = 0;
   menu_layer_reload_data(s_menu_layer);
 
@@ -1044,6 +1084,68 @@ static void inbox_received_callback(DictionaryIterator *iterator, void *context)
         }
       }
     }
+  } else if (message_type == MSG_SEND_STATION_COUNT) {
+    // Received station count from JavaScript
+    Tuple *count_tuple = dict_find(iterator, MESSAGE_KEY_CONFIG_STATION_COUNT);
+    if (count_tuple) {
+      uint8_t count = count_tuple->value->uint8;
+      s_num_stations = (count > MAX_FAVORITE_STATIONS) ? MAX_FAVORITE_STATIONS : count;
+      s_stations_received = false;  // Reset flag
+      APP_LOG(APP_LOG_LEVEL_INFO, "Expecting %d favorite stations", s_num_stations);
+    }
+  } else if (message_type == MSG_SEND_STATION) {
+    // Received individual station data
+    Tuple *index_tuple = dict_find(iterator, MESSAGE_KEY_CONFIG_STATION_INDEX);
+    if (!index_tuple) return;
+
+    uint8_t index = index_tuple->value->uint8;
+    if (index >= MAX_FAVORITE_STATIONS) return;
+
+    Station *station = &s_stations[index];
+
+    // Read station name
+    Tuple *name_tuple = dict_find(iterator, MESSAGE_KEY_CONFIG_STATION_NAME);
+    if (name_tuple) {
+      strncpy(station->name, name_tuple->value->cstring, sizeof(station->name) - 1);
+      station->name[sizeof(station->name) - 1] = '\0';
+    }
+
+    // Read iRail ID
+    Tuple *id_tuple = dict_find(iterator, MESSAGE_KEY_CONFIG_STATION_IRAIL_ID);
+    if (id_tuple) {
+      strncpy(station->irail_id, id_tuple->value->cstring, sizeof(station->irail_id) - 1);
+      station->irail_id[sizeof(station->irail_id) - 1] = '\0';
+    }
+
+    APP_LOG(APP_LOG_LEVEL_INFO, "Received station %d: %s (%s)", index, station->name, station->irail_id);
+
+    // If this is the last station, mark as complete and update UI
+    if (index == s_num_stations - 1) {
+      s_stations_received = true;
+      APP_LOG(APP_LOG_LEVEL_INFO, "All stations received, requesting initial data");
+      menu_layer_reload_data(s_menu_layer);
+
+      // Request initial train data now that we have stations
+      request_train_data();
+    }
+  } else if (message_type == MSG_SET_ACTIVE_ROUTE) {
+    // Set active route based on smart schedule
+    Tuple *from_index_tuple = dict_find(iterator, MESSAGE_KEY_CONFIG_FROM_INDEX);
+    Tuple *to_index_tuple = dict_find(iterator, MESSAGE_KEY_CONFIG_TO_INDEX);
+
+    if (from_index_tuple && to_index_tuple) {
+      uint8_t from_idx = from_index_tuple->value->uint8;
+      uint8_t to_idx = to_index_tuple->value->uint8;
+
+      if (from_idx < s_num_stations && to_idx < s_num_stations) {
+        s_from_station_index = from_idx;
+        s_to_station_index = to_idx;
+        APP_LOG(APP_LOG_LEVEL_INFO, "Active route set: %s -> %s",
+                s_stations[from_idx].name, s_stations[to_idx].name);
+        menu_layer_reload_data(s_menu_layer);
+        request_train_data();
+      }
+    }
   }
 }
 
@@ -1053,10 +1155,30 @@ static void inbox_dropped_callback(AppMessageResult reason, void *context) {
 
 static void outbox_failed_callback(DictionaryIterator *iterator, AppMessageResult reason, void *context) {
   APP_LOG(APP_LOG_LEVEL_ERROR, "Outbox send failed: %d", (int)reason);
+
+  // Set error state and update UI
+  s_data_loading = false;
+  s_data_failed = true;
+  menu_layer_reload_data(s_menu_layer);
 }
 
 static void outbox_sent_callback(DictionaryIterator *iterator, void *context) {
   APP_LOG(APP_LOG_LEVEL_INFO, "Outbox send success!");
+}
+
+// Initialize with default stations (fallback)
+static void init_default_stations(void) {
+  s_num_stations = NUM_DEFAULT_STATIONS;
+  for (uint8_t i = 0; i < NUM_DEFAULT_STATIONS && i < MAX_FAVORITE_STATIONS; i++) {
+    strncpy(s_stations[i].name, DEFAULT_STATIONS[i].name, sizeof(s_stations[i].name) - 1);
+    s_stations[i].name[sizeof(s_stations[i].name) - 1] = '\0';
+    strncpy(s_stations[i].irail_id, DEFAULT_STATIONS[i].irail_id, sizeof(s_stations[i].irail_id) - 1);
+    s_stations[i].irail_id[sizeof(s_stations[i].irail_id) - 1] = '\0';
+  }
+  s_from_station_index = 0;
+  s_to_station_index = 1;
+  s_stations_received = true;
+  APP_LOG(APP_LOG_LEVEL_INFO, "Initialized with %d default stations", s_num_stations);
 }
 
 // App initialization
@@ -1070,6 +1192,9 @@ static void init(void) {
   s_icon_start_white = gbitmap_create_with_resource(RESOURCE_ID_ICON_START_WHITE);
   s_icon_finish = gbitmap_create_with_resource(RESOURCE_ID_ICON_FINISH);
   s_icon_finish_white = gbitmap_create_with_resource(RESOURCE_ID_ICON_FINISH_WHITE);
+
+  // Initialize with default stations (will be replaced if config is received)
+  init_default_stations();
 
   // Create main window
   s_main_window = window_create();
@@ -1091,10 +1216,10 @@ static void init(void) {
   // Open AppMessage with appropriate buffer sizes
   app_message_open(512, 512);
 
-  // Request initial train data
-  request_train_data();
-
+  // Don't request data immediately - wait for JavaScript to be ready
+  // JavaScript will send stations or we'll use defaults, then request data
   APP_LOG(APP_LOG_LEVEL_DEBUG, "NMBS Schedule App initialized");
+  APP_LOG(APP_LOG_LEVEL_INFO, "Waiting for JavaScript to send configuration...");
 }
 
 static void deinit(void) {

@@ -642,6 +642,331 @@ All message keys must be defined in `package.json` for AppMessage communication:
 **Auto-generated Constants**:
 Pebble SDK generates `MESSAGE_KEY_*` constants in C from these keys.
 
+## User Configuration System
+
+### Overview
+The app provides a web-based configuration interface for customizing favorite stations and setting up smart route schedules. Configuration is accessed through the Pebble mobile app settings.
+
+### Architecture
+
+**Three-Tier Data Flow**:
+1. **iRail API** → Both config page and watch app fetch full Belgian station list independently
+2. **Config Page** → User selects favorites (up to 6) and defines schedules using iRail IDs
+3. **Watch App** → Receives IDs, displays names, makes API requests with IDs
+
+**Why iRail IDs as Source of Truth**:
+- Stable across localizations (Brussels/Brussel/Bruxelles → BE.NMBS.008813003)
+- Direct API compatibility
+- Prevents ambiguity
+
+### Configuration Components
+
+#### 1. Station Cache System
+
+**Fetching** (src/pkjs/index.js):
+```javascript
+function fetchStations() {
+    var xhr = new XMLHttpRequest();
+    xhr.open('GET', 'https://api.irail.be/v1/stations?format=json', true);
+    xhr.onload = function() {
+        var response = JSON.parse(xhr.responseText);
+        stationCache = response.station.map(function(s) {
+            return {
+                id: s.id,                    // "BE.NMBS.008813003"
+                name: s.name,                // "Brussels-Central"
+                standardName: s.standardname // "Brussel-Centraal"
+            };
+        });
+        localStorage.setItem('nmbs_station_cache', JSON.stringify(stationCache));
+    };
+    xhr.send();
+}
+```
+
+**Called on**:
+- `ready` event (loads cached immediately, fetches fresh in background)
+- Config page load (independent fetch)
+
+**Storage**: `localStorage['nmbs_station_cache']` (~600+ stations, ~50KB)
+
+#### 2. Configuration Page (src/pkjs/config.html)
+
+**Self-Contained Architecture**:
+- Fetches own station list from iRail API
+- Uses localStorage for caching (same key as index.js)
+- No URL parameters needed (solves size limit problem)
+- Returns config via `pebblejs://close#encodedJSON`
+
+**UI Sections**:
+1. **Active Route Banner**: Shows currently active schedule (green) or none (gray)
+2. **Favorite Stations**: Searchable list, checkbox selection (max 6)
+3. **Smart Schedules**:
+   - Simple Mode: Template buttons (Morning Commute, Evening Return, Weekend)
+   - Advanced Mode: List view with add/remove
+
+**Template Behavior**:
+```javascript
+function addTemplateSchedule(template) {
+    var schedule = {
+        id: template + '-' + Date.now(),
+        fromId: favoriteStations[0],  // First favorite
+        toId: favoriteStations[1],    // Second favorite
+        enabled: true
+    };
+
+    if (template === 'morning-commute') {
+        schedule.days = [1, 2, 3, 4, 5];  // Mon-Fri
+        schedule.startTime = '06:00';
+        schedule.endTime = '12:00';
+    } else if (template === 'evening-return') {
+        schedule.days = [1, 2, 3, 4, 5];
+        schedule.startTime = '12:00';
+        schedule.endTime = '23:59';
+        // Swap from/to for return journey
+        schedule.fromId = favoriteStations[1];
+        schedule.toId = favoriteStations[0];
+    }
+
+    smartSchedules.push(schedule);
+}
+```
+
+**Data Return**:
+```javascript
+function saveConfig() {
+    var config = {
+        favoriteStations: ['BE.NMBS.008813003', 'BE.NMBS.008833001', ...],
+        smartSchedules: [{id, fromId, toId, days, startTime, endTime, enabled}, ...]
+    };
+    document.location = 'pebblejs://close#' + encodeURIComponent(JSON.stringify(config));
+}
+```
+
+#### 3. Schedule Evaluation Engine
+
+**Runs on**: App launch, data request, config save
+
+```javascript
+function evaluateSchedules() {
+    var now = new Date();
+    var currentDay = now.getDay();  // 0=Sun, 6=Sat
+    var currentTime = '14:30';      // HH:MM format
+
+    for (var i = 0; i < smartSchedules.length; i++) {
+        var sched = smartSchedules[i];
+        if (!sched.enabled) continue;
+
+        // Check day match
+        if (sched.days.indexOf(currentDay) === -1) continue;
+
+        // Check time range
+        if (currentTime >= sched.startTime && currentTime <= sched.endTime) {
+            return {fromId: sched.fromId, toId: sched.toId};
+        }
+    }
+    return null;
+}
+```
+
+**Priority**: First matching schedule wins (order matters)
+
+#### 4. C-Side Dynamic Station Handling
+
+**Data Structures** (src/c/nmbs.c):
+```c
+typedef struct {
+  char name[64];        // "Brussels-Central"
+  char irail_id[32];    // "BE.NMBS.008813003"
+} Station;
+
+#define MAX_FAVORITE_STATIONS 6
+static Station s_stations[MAX_FAVORITE_STATIONS];
+static uint8_t s_num_stations = 0;
+static bool s_stations_received = false;
+
+// Fallback defaults
+static const Station DEFAULT_STATIONS[] = {
+  {"Brussels-Central", "BE.NMBS.008813003"},
+  {"Antwerp-Central", "BE.NMBS.008821006"},
+  {"Ghent-Sint-Pieters", "BE.NMBS.008892007"},
+  {"Liège-Guillemins", "BE.NMBS.008841004"},
+  {"Leuven", "BE.NMBS.008833001"}
+};
+```
+
+**Message Handlers**:
+```c
+// MSG_SEND_STATION_COUNT: Expect N stations
+s_num_stations = count_tuple->value->uint8;
+
+// MSG_SEND_STATION: Receive station sequentially
+strncpy(s_stations[index].name, name_tuple->value->cstring, 63);
+strncpy(s_stations[index].irail_id, id_tuple->value->cstring, 31);
+
+// MSG_SET_ACTIVE_ROUTE: Auto-select from/to based on schedule
+s_from_station_index = from_idx;
+s_to_station_index = to_idx;
+request_train_data();
+```
+
+**Requesting Data**:
+```c
+// Send iRail IDs instead of names
+dict_write_cstring(iter, MESSAGE_KEY_FROM_STATION_ID, s_stations[s_from_station_index].irail_id);
+dict_write_cstring(iter, MESSAGE_KEY_TO_STATION_ID, s_stations[s_to_station_index].irail_id);
+```
+
+### Configuration Flow
+
+1. **User Opens Settings** (Pebble app → Settings → NMBS)
+   - `showConfiguration` event fires
+   - Opens config.html (must be hosted publicly)
+
+2. **Config Page Loads**
+   - Fetches stations from iRail API
+   - Loads saved config from localStorage
+   - Displays current favorites and schedules
+
+3. **User Configures**
+   - Selects up to 6 favorite stations
+   - Adds schedules (Simple templates or Advanced custom)
+   - Sees "Active Now" preview update in real-time
+
+4. **User Saves**
+   - Config page serializes to JSON
+   - Returns via `pebblejs://close#data`
+   - `webviewclosed` event fires in index.js
+
+5. **JavaScript Processes**
+   - Saves to localStorage (`nmbs_favorite_stations`, `nmbs_smart_schedules`)
+   - Evaluates schedules → determines active route
+   - Sends station list to C code (MSG_SEND_STATION_COUNT + MSG_SEND_STATION × N)
+   - Sends active route indices (MSG_SET_ACTIVE_ROUTE)
+
+6. **Watch App Updates**
+   - Receives favorite stations, updates menu
+   - Sets from/to indices based on schedule
+   - Requests fresh train data with new route
+
+### LocalStorage Keys
+
+| Key | Content | Size | Purpose |
+|-----|---------|------|---------|
+| `nmbs_station_cache` | Full station list from API | ~50KB | Offline station names/IDs |
+| `nmbs_favorite_stations` | Array of iRail IDs | ~200B | User's 6 favorite stations |
+| `nmbs_smart_schedules` | Array of schedule rules | ~500B | Time-based route automation |
+| `nmbs_from_station` | iRail ID | ~30B | Last selected from station |
+| `nmbs_to_station` | iRail ID | ~30B | Last selected to station |
+| `nmbs_connections` | Connection identifiers | ~2KB | For detail fetching |
+
+### Message Protocol Additions
+
+**New Message Types**:
+```c
+#define MSG_SEND_STATION_COUNT 6  // JS → C: Sending N stations
+#define MSG_SEND_STATION 7         // JS → C: Station data (sequential)
+#define MSG_SET_ACTIVE_ROUTE 8     // JS → C: Auto-select from/to
+```
+
+**New Message Keys** (package.json):
+```json
+"FROM_STATION_ID",           // iRail ID for from station
+"TO_STATION_ID",             // iRail ID for to station
+"CONFIG_STATION_COUNT",      // Number of favorites
+"CONFIG_STATION_INDEX",      // Station index (0-5)
+"CONFIG_STATION_NAME",       // Display name
+"CONFIG_STATION_IRAIL_ID",   // iRail station ID
+"CONFIG_FROM_INDEX",         // Active from index
+"CONFIG_TO_INDEX"            // Active to index
+```
+
+### Hosting the Configuration Page
+
+The config.html file must be hosted on a publicly accessible URL. Options:
+
+**GitHub Pages** (Recommended):
+```bash
+# Create a new repo: your-username/nmbs-config
+# Enable GitHub Pages from Settings
+# URL: https://your-username.github.io/nmbs-config/config.html
+```
+
+**Update index.js**:
+```javascript
+Pebble.addEventListener('showConfiguration', function() {
+    var configUrl = 'https://your-username.github.io/nmbs-config/config.html';
+    Pebble.openURL(configUrl);
+});
+```
+
+**Alternative**: data: URL (limited, for testing only)
+```javascript
+var configUrl = 'data:text/html;charset=utf-8,' + encodeURIComponent(configHTML);
+```
+
+### Smart Schedule Data Structure
+
+```javascript
+{
+  "id": "morning-commute-1234567890",        // Unique ID
+  "fromId": "BE.NMBS.008833001",             // Leuven
+  "toId": "BE.NMBS.008813003",               // Brussels-Central
+  "days": [1, 2, 3, 4, 5],                   // Mon-Fri (0=Sun, 6=Sat)
+  "startTime": "06:00",                      // HH:MM format
+  "endTime": "12:00",                        // HH:MM format
+  "enabled": true                            // Can be toggled off
+}
+```
+
+**Day Encoding**: JavaScript `Date.getDay()` format
+- 0 = Sunday
+- 1 = Monday
+- 2 = Tuesday
+- 3 = Wednesday
+- 4 = Thursday
+- 5 = Friday
+- 6 = Saturday
+
+### Backward Compatibility
+
+**Fallback Behavior**:
+1. If no config received within app startup → use DEFAULT_STATIONS
+2. If config load fails → gracefully degrade to 5 hardcoded stations
+3. Old MESSAGE_KEY_FROM_STATION still supported for legacy compatibility
+
+**Migration Path**:
+- Existing users see default 5 stations until they open Settings
+- First config save migrates them to new system
+- Old localStorage keys (`nmbs_from_station` as name) converted to IDs
+
+### Testing Configuration
+
+**Test Checklist**:
+1. ✅ Station fetching on app launch
+2. ✅ Config page opens from Pebble Settings
+3. ✅ Station search/filter works
+4. ✅ Max 6 stations enforced
+5. ✅ Template schedules create correct rules
+6. ✅ Schedule evaluation matches current time
+7. ✅ Active route banner updates
+8. ✅ Save sends data back to watch
+9. ✅ Watch receives stations and updates menu
+10. ✅ Auto-route selection triggers data request
+11. ✅ Manual station cycling still works
+12. ✅ Fallback to defaults if config fails
+
+**Debug Logging**:
+```bash
+pebble logs --emulator aplite | grep -E '(station|config|schedule)'
+```
+
+**Key Log Messages**:
+- `"Fetched X stations from API"` - Station cache updated
+- `"Loaded X favorite stations"` - Config loaded
+- `"Matched schedule: morning-commute"` - Schedule activated
+- `"Received station X: Name (ID)"` - C code receiving stations
+- `"Active route set: A -> B"` - Auto-selection triggered
+
 ## VSCode IntelliSense
 The `.vscode/c_cpp_properties.json` configures paths to Pebble SDK headers for autocomplete. SDK location: `~/Library/Application Support/Pebble SDK/SDKs/4.5/`
 

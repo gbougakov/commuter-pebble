@@ -1,7 +1,11 @@
-// iRail API base URL
+// iRail API URLs
 var IRAIL_API_URL = 'https://api.irail.be/connections/';
+var IRAIL_STATIONS_URL = 'https://api.irail.be/v1/stations?format=json';
 
-// Station ID mapping (iRail uses specific station IDs)
+// Station cache (fetched from API)
+var stationCache = [];
+
+// Default station IDs (fallback if no config and backward compatibility)
 var STATION_IDS = {
     'Brussels-Central': 'BE.NMBS.008813003',
     'Antwerp-Central': 'BE.NMBS.008821006',
@@ -16,6 +20,9 @@ var MSG_SEND_DEPARTURE = 2;
 var MSG_SEND_COUNT = 3;
 var MSG_REQUEST_DETAILS = 4;
 var MSG_SEND_DETAIL = 5;
+var MSG_SEND_STATION_COUNT = 6;
+var MSG_SEND_STATION = 7;
+var MSG_SET_ACTIVE_ROUTE = 8;
 
 // Debounce timer for API requests
 var requestDebounceTimer = null;
@@ -31,6 +38,9 @@ var connectionIdentifiers = []; // Array of {vehicle, departTime} for each depar
 var STORAGE_KEY_FROM_STATION = 'nmbs_from_station';
 var STORAGE_KEY_TO_STATION = 'nmbs_to_station';
 var STORAGE_KEY_CONNECTIONS = 'nmbs_connections';
+var STORAGE_KEY_STATION_CACHE = 'nmbs_station_cache';
+var STORAGE_KEY_FAVORITE_STATIONS = 'nmbs_favorite_stations';
+var STORAGE_KEY_SMART_SCHEDULES = 'nmbs_smart_schedules';
 
 // Load persisted data from localStorage
 function loadPersistedData() {
@@ -78,25 +88,23 @@ function savePersistedData() {
     }
 }
 
-// Fetch train data from iRail API
-function fetchTrainData(fromStation, toStation) {
+// Fetch train data from iRail API (by iRail IDs)
+function fetchTrainDataById(fromId, toId) {
     // Store current route for detail requests
-    currentFromStation = fromStation;
-    currentToStation = toStation;
+    currentFromStation = fromId;
+    currentToStation = toId;
     connectionIdentifiers = [];
 
     // Persist station selection to localStorage
     savePersistedData();
-    var fromId = STATION_IDS[fromStation];
-    var toId = STATION_IDS[toStation];
 
     if (!fromId || !toId) {
-        console.log('Invalid station names: ' + fromStation + ' -> ' + toStation);
+        console.log('Invalid station IDs: ' + fromId + ' -> ' + toId);
         return;
     }
 
     // Can't request same station for from/to
-    if (fromStation === toStation) {
+    if (fromId === toId) {
         console.log('From and To stations are the same, sending empty result');
         Pebble.sendAppMessage({
             'MESSAGE_TYPE': MSG_SEND_COUNT,
@@ -105,11 +113,7 @@ function fetchTrainData(fromStation, toStation) {
         return;
     }
 
-    // Build API URL with current time
-    var now = new Date();
-    var dateStr = formatDate(now);
-    var timeStr = formatTime(now);
-
+    // Build API URL
     var url = IRAIL_API_URL +
         '?from=' + encodeURIComponent(fromId) +
         '&to=' + encodeURIComponent(toId) +
@@ -329,8 +333,9 @@ function fetchConnectionDetails(departureIndex) {
     }
 
     var identifier = connectionIdentifiers[departureIndex];
-    var fromId = STATION_IDS[currentFromStation];
-    var toId = STATION_IDS[currentToStation];
+    // currentFromStation and currentToStation are now iRail IDs
+    var fromId = currentFromStation;
+    var toId = currentToStation;
 
     if (!fromId || !toId) {
         console.log('Invalid stations for detail request');
@@ -386,6 +391,75 @@ function fetchConnectionDetails(departureIndex) {
 function checkPlatformChanged(departureOrArrival) {
     if (!departureOrArrival.platforminfo) return 0;
     return (departureOrArrival.platforminfo.normal === "0") ? 1 : 0;
+}
+
+// Fetch station list from iRail API and cache it
+function fetchStations() {
+    console.log('Fetching stations from iRail API...');
+    var xhr = new XMLHttpRequest();
+    xhr.open('GET', IRAIL_STATIONS_URL, true);
+    xhr.onload = function() {
+        if (xhr.readyState === 4 && xhr.status === 200) {
+            try {
+                var response = JSON.parse(xhr.responseText);
+                if (response.station && response.station.length > 0) {
+                    // Map to simplified structure
+                    stationCache = response.station.map(function(s) {
+                        return {
+                            id: s.id,                          // "BE.NMBS.008813003"
+                            name: s.name,                      // "Brussels-Central"
+                            standardName: s.standardname       // "Brussel-Centraal"
+                        };
+                    });
+
+                    // Save to localStorage
+                    localStorage.setItem(STORAGE_KEY_STATION_CACHE, JSON.stringify(stationCache));
+                    console.log('Fetched and cached ' + stationCache.length + ' stations');
+                } else {
+                    console.log('No stations in API response');
+                }
+            } catch (e) {
+                console.log('Error parsing stations API response: ' + e.message);
+            }
+        } else {
+            console.log('Failed to fetch stations: ' + xhr.status);
+        }
+    };
+    xhr.onerror = function() {
+        console.log('Network error fetching stations');
+    };
+    xhr.send();
+}
+
+// Load cached stations from localStorage
+function loadCachedStations() {
+    try {
+        var cached = localStorage.getItem(STORAGE_KEY_STATION_CACHE);
+        if (cached) {
+            stationCache = JSON.parse(cached);
+            console.log('Loaded ' + stationCache.length + ' cached stations');
+            return true;
+        }
+    } catch (e) {
+        console.log('Error loading cached stations: ' + e.message);
+    }
+    return false;
+}
+
+// Get station object by iRail ID
+function getStationById(id) {
+    for (var i = 0; i < stationCache.length; i++) {
+        if (stationCache[i].id === id) {
+            return stationCache[i];
+        }
+    }
+    return null;
+}
+
+// Get station name by iRail ID (with fallback to ID)
+function getStationNameById(id) {
+    var station = getStationById(id);
+    return station ? station.name : id;
 }
 
 // Send full connection details to watch (leg-by-leg)
@@ -543,9 +617,24 @@ Pebble.addEventListener('appmessage', function (e) {
     var messageType = e.payload.MESSAGE_TYPE;
 
     if (messageType === MSG_REQUEST_DATA) {
-        var fromStation = e.payload.FROM_STATION;
-        var toStation = e.payload.TO_STATION;
-        console.log('Data requested: ' + fromStation + ' -> ' + toStation);
+        // Check if using new iRail ID format or old name format
+        var fromId = e.payload.FROM_STATION_ID;
+        var toId = e.payload.TO_STATION_ID;
+
+        if (fromId && toId) {
+            console.log('Data requested (by ID): ' + fromId + ' -> ' + toId);
+            currentFromStation = fromId;
+            currentToStation = toId;
+        } else {
+            // Fallback to old format (station names)
+            var fromStation = e.payload.FROM_STATION;
+            var toStation = e.payload.TO_STATION;
+            console.log('Data requested (by name): ' + fromStation + ' -> ' + toStation);
+            fromId = STATION_IDS[fromStation];
+            toId = STATION_IDS[toStation];
+            currentFromStation = fromStation;
+            currentToStation = toStation;
+        }
 
         // Clear any pending request
         if (requestDebounceTimer) {
@@ -556,7 +645,7 @@ Pebble.addEventListener('appmessage', function (e) {
         // Debounce the API request
         requestDebounceTimer = setTimeout(function () {
             console.log('Executing debounced request');
-            fetchTrainData(fromStation, toStation);
+            fetchTrainDataById(fromId, toId);
             requestDebounceTimer = null;
         }, DEBOUNCE_DELAY);
     } else if (messageType === MSG_REQUEST_DETAILS) {
@@ -569,10 +658,215 @@ Pebble.addEventListener('appmessage', function (e) {
 Pebble.addEventListener('ready', function () {
     console.log('PebbleKit JS ready!');
 
+    // Load cached stations immediately (for offline use)
+    loadCachedStations();
+
+    // Fetch fresh station list in background
+    fetchStations();
+
     // Load persisted station selection and connection data
     loadPersistedData();
+
+    // Load user configuration and send to watch
+    var favoritesJson = localStorage.getItem(STORAGE_KEY_FAVORITE_STATIONS);
+    if (favoritesJson) {
+        try {
+            var favoriteStations = JSON.parse(favoritesJson);
+            console.log('Loading saved configuration with ' + favoriteStations.length + ' stations');
+            sendStationsToWatch(favoriteStations);
+
+            // Evaluate schedules and set active route
+            var activeRoute = evaluateSchedules();
+            if (activeRoute) {
+                console.log('Found active schedule');
+                setActiveRoute(favoriteStations, activeRoute.fromId, activeRoute.toId);
+            } else {
+                console.log('No active schedule, will use default route');
+            }
+        } catch (e) {
+            console.log('Error loading configuration: ' + e.message);
+        }
+    } else {
+        console.log('No saved configuration, watch will use defaults');
+    }
 
     if (currentFromStation && currentToStation) {
         console.log('Restored session: ' + currentFromStation + ' -> ' + currentToStation);
     }
 });
+
+// Evaluate smart schedules and return active route (if any)
+function evaluateSchedules() {
+    try {
+        var schedulesJson = localStorage.getItem(STORAGE_KEY_SMART_SCHEDULES);
+        if (!schedulesJson) {
+            console.log('No smart schedules configured');
+            return null;
+        }
+
+        var schedules = JSON.parse(schedulesJson);
+        var now = new Date();
+        var currentDay = now.getDay();  // 0=Sunday, 1=Monday, ..., 6=Saturday
+        var currentTime = ('0' + now.getHours()).slice(-2) + ':' + ('0' + now.getMinutes()).slice(-2);
+
+        console.log('Evaluating schedules for day=' + currentDay + ', time=' + currentTime);
+
+        for (var i = 0; i < schedules.length; i++) {
+            var schedule = schedules[i];
+
+            // Skip disabled schedules
+            if (!schedule.enabled) {
+                continue;
+            }
+
+            // Check if current day matches
+            var dayMatches = false;
+            for (var j = 0; j < schedule.days.length; j++) {
+                if (schedule.days[j] === currentDay) {
+                    dayMatches = true;
+                    break;
+                }
+            }
+
+            if (!dayMatches) {
+                continue;
+            }
+
+            // Check if current time is within range
+            if (currentTime >= schedule.startTime && currentTime <= schedule.endTime) {
+                console.log('Matched schedule: ' + schedule.id);
+                return {
+                    fromId: schedule.fromId,
+                    toId: schedule.toId
+                };
+            }
+        }
+
+        console.log('No matching schedule found');
+        return null;
+    } catch (e) {
+        console.log('Error evaluating schedules: ' + e.message);
+        return null;
+    }
+}
+
+// Configuration page handlers
+Pebble.addEventListener('showConfiguration', function() {
+    console.log('Opening configuration page');
+    var configUrl = 'https://assets-eu.gbgk.net/nmbs-pebble/config.html';
+    Pebble.openURL(configUrl);
+});
+
+Pebble.addEventListener('webviewclosed', function(e) {
+    console.log('Configuration closed');
+
+    if (e && e.response) {
+        try {
+            var config = JSON.parse(decodeURIComponent(e.response));
+            console.log('Received config: ' + JSON.stringify(config));
+
+            // Save favorite stations
+            if (config.favoriteStations && config.favoriteStations.length > 0) {
+                localStorage.setItem(STORAGE_KEY_FAVORITE_STATIONS, JSON.stringify(config.favoriteStations));
+                console.log('Saved ' + config.favoriteStations.length + ' favorite stations');
+
+                // Send stations to watch
+                sendStationsToWatch(config.favoriteStations);
+            }
+
+            // Save smart schedules
+            if (config.smartSchedules) {
+                localStorage.setItem(STORAGE_KEY_SMART_SCHEDULES, JSON.stringify(config.smartSchedules));
+                console.log('Saved ' + config.smartSchedules.length + ' smart schedules');
+
+                // Evaluate and set active route
+                var activeRoute = evaluateSchedules();
+                if (activeRoute) {
+                    setActiveRoute(config.favoriteStations, activeRoute.fromId, activeRoute.toId);
+                }
+            }
+
+        } catch (e) {
+            console.log('Error parsing configuration: ' + e.message);
+        }
+    } else {
+        console.log('Configuration cancelled or no data received');
+    }
+});
+
+// Send favorite stations to watch
+function sendStationsToWatch(stationIds) {
+    console.log('Sending ' + stationIds.length + ' stations to watch');
+
+    // Send count first
+    Pebble.sendAppMessage({
+        'MESSAGE_TYPE': MSG_SEND_STATION_COUNT,
+        'CONFIG_STATION_COUNT': stationIds.length
+    }, function() {
+        console.log('Station count sent');
+        // Start sending individual stations
+        sendStationSequential(stationIds, 0);
+    }, function(e) {
+        console.log('Failed to send station count: ' + e.error.message);
+    });
+}
+
+// Send stations one at a time (sequential with callbacks)
+function sendStationSequential(stationIds, index) {
+    if (index >= stationIds.length) {
+        console.log('All stations sent to watch');
+        return;
+    }
+
+    var stationId = stationIds[index];
+    var station = getStationById(stationId);
+
+    if (!station) {
+        console.log('Station not found in cache: ' + stationId);
+        // Skip and continue
+        sendStationSequential(stationIds, index + 1);
+        return;
+    }
+
+    var message = {
+        'MESSAGE_TYPE': MSG_SEND_STATION,
+        'CONFIG_STATION_INDEX': index,
+        'CONFIG_STATION_NAME': station.name.substring(0, 63),
+        'CONFIG_STATION_IRAIL_ID': station.id.substring(0, 31)
+    };
+
+    console.log('Sending station ' + index + ': ' + station.name);
+
+    Pebble.sendAppMessage(message, function() {
+        // Success - send next station
+        sendStationSequential(stationIds, index + 1);
+    }, function(e) {
+        console.log('Failed to send station ' + index + ': ' + e.error.message);
+        // Try next one anyway
+        sendStationSequential(stationIds, index + 1);
+    });
+}
+
+// Set active route based on schedule
+function setActiveRoute(stationIds, fromId, toId) {
+    // Find indices in favorite stations array
+    var fromIndex = stationIds.indexOf(fromId);
+    var toIndex = stationIds.indexOf(toId);
+
+    if (fromIndex === -1 || toIndex === -1) {
+        console.log('Active route stations not in favorites');
+        return;
+    }
+
+    console.log('Setting active route: index ' + fromIndex + ' -> ' + toIndex);
+
+    Pebble.sendAppMessage({
+        'MESSAGE_TYPE': MSG_SET_ACTIVE_ROUTE,
+        'CONFIG_FROM_INDEX': fromIndex,
+        'CONFIG_TO_INDEX': toIndex
+    }, function() {
+        console.log('Active route set successfully');
+    }, function(e) {
+        console.log('Failed to set active route: ' + e.error.message);
+    });
+}

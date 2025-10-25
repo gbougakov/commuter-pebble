@@ -10,6 +10,9 @@
     "uuid": "0a2adab1-0081-4e7b-9e3f-d2b47b9c9409",
     "sdkVersion": "3",
     "enableMultiJS": true,
+    "capabilities": [
+      "configurable"
+    ],
     "targetPlatforms": [
       "aplite",
       "basalt",
@@ -25,6 +28,8 @@
       "MESSAGE_TYPE",
       "FROM_STATION",
       "TO_STATION",
+      "FROM_STATION_ID",
+      "TO_STATION_ID",
       "DEPARTURE_INDEX",
       "DESTINATION",
       "DEPART_TIME",
@@ -58,7 +63,13 @@
       "LEG_DIRECTION",
       "LEG_STOP_COUNT",
       "LEG_DEPART_PLATFORM_CHANGED",
-      "LEG_ARRIVE_PLATFORM_CHANGED"
+      "LEG_ARRIVE_PLATFORM_CHANGED",
+      "CONFIG_STATION_COUNT",
+      "CONFIG_STATION_INDEX",
+      "CONFIG_STATION_NAME",
+      "CONFIG_STATION_IRAIL_ID",
+      "CONFIG_FROM_INDEX",
+      "CONFIG_TO_INDEX"
     ],
     "resources": {
       "media": [
