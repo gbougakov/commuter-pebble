@@ -4,6 +4,8 @@
 
 A real-time Belgian railway (NMBS/SNCB) train schedule viewer for Pebble smartwatches. Check departures, delays, and platform changes directly from your wrist.
 
+[**Download on Rebble →**](https://apps.rebble.io/en_US/application/68fd14f9504cc500097101e2)
+
 ## Features
 
 - **Real-time Train Data**: Live departure times, delays, and platform information via the [iRail API](https://api.irail.be/)
