@@ -1184,6 +1184,6 @@ Each train slice expires at its actual departure time - when a train at 14:30 de
 - Only uses functions already present in the original codebase (`snprintf`, `time`, `strcmp`)
 - Avoided problematic libc functions (`sscanf`, `localtime`, `gmtime`) that cause linker issues on some platforms
 
-- Do not ever use basalt, test in aplite
+- Do not ever use basalt, test in diorite
 
 - Always document everything relevant in CLAUDE.md

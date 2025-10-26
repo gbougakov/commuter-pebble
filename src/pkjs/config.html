@@ -2,8 +2,13 @@
 <html>
 <head>
     <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>NMBS Configuration</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+    <title>Commuter Configuration</title>
+    <!-- HTML in your document's head -->
+    <link rel="preconnect" href="https://rsms.me/">
+    <link rel="stylesheet" href="https://rsms.me/inter/inter.css">
+
+
     <style>
         * {
             box-sizing: border-box;
@@ -11,512 +16,649 @@
             padding: 0;
         }
 
+        /* CSS */
+        :root {
+        font-family: Inter, sans-serif;
+        font-feature-settings: 'liga' 1, 'calt' 1; /* fix for Chrome */
+        }
+        @supports (font-variation-settings: normal) {
+        :root { font-family: InterVariable, sans-serif; }
+        }
+
         body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-            background: #f5f5f5;
-            padding: 0;
+            background: #e8e8e8;
+            padding: 0 0 100px 0;
             margin: 0;
             font-size: 16px;
-            line-height: 1.5;
+            line-height: 1.2;
+            -webkit-font-smoothing: antialiased;
         }
 
-        .header {
-            background: #1a1a1a;
-            color: white;
-            padding: 16px;
-            text-align: center;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        button {
+            font-family: inherit;
         }
 
-        .header h1 {
-            font-size: 20px;
-            font-weight: 600;
-            margin-bottom: 4px;
+        .container {
+            max-width: 428px;
+            margin: 0 auto;
+            padding: 0px;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
         }
 
-        .header .subtitle {
-            font-size: 13px;
-            opacity: 0.8;
-        }
-
-        .active-route {
-            background: #28a745;
-            color: white;
-            padding: 12px 16px;
-            text-align: center;
-            font-size: 14px;
-            font-weight: 500;
-        }
-
-        .active-route.none {
-            background: #6c757d;
-        }
-
-        .section {
-            background: white;
-            margin: 16px;
-            border-radius: 8px;
-            overflow: hidden;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-        }
-
-        .section-header {
-            background: #f8f9fa;
-            padding: 12px 16px;
-            border-bottom: 1px solid #dee2e6;
-            font-weight: 600;
-            font-size: 15px;
-        }
-
-        .section-content {
-            padding: 16px;
-        }
-
-        .search-box {
-            width: 100%;
-            padding: 10px 12px;
-            border: 1px solid #ced4da;
-            border-radius: 4px;
-            font-size: 15px;
-            margin-bottom: 12px;
-        }
-
-        .station-list {
-            max-height: 300px;
-            overflow-y: auto;
-            border: 1px solid #dee2e6;
-            border-radius: 4px;
-        }
-
-        .station-item {
-            padding: 10px 12px;
-            border-bottom: 1px solid #f0f0f0;
+        /* Header Card */
+        .header-card {
+            background: #0055ff;
+            border-radius: 20px;
+            padding: 20px;
             display: flex;
             align-items: center;
+            justify-content: space-between;
+            padding-right: 0;
         }
 
-        .station-item:last-child {
-            border-bottom: none;
-        }
-
-        .station-item input[type="checkbox"] {
-            margin-right: 10px;
-            width: 18px;
-            height: 18px;
-        }
-
-        .station-item.disabled {
-            opacity: 0.5;
-            pointer-events: none;
-        }
-
-        .station-count {
-            font-size: 13px;
-            color: #6c757d;
-            margin-bottom: 8px;
-        }
-
-        .mode-toggle {
-            display: flex;
-            gap: 8px;
-            margin-bottom: 16px;
-        }
-
-        .mode-btn {
-            flex: 1;
-            padding: 10px;
-            border: 2px solid #dee2e6;
-            background: white;
-            border-radius: 4px;
-            font-size: 14px;
-            font-weight: 500;
-            cursor: pointer;
-            transition: all 0.2s;
-        }
-
-        .mode-btn.active {
-            background: #007bff;
+        .header-title {
+            font-size: 32px;
+            font-weight: 600;
             color: white;
-            border-color: #007bff;
+            line-height: 32px;
         }
 
+        .header-icon {
+            width: 123px;
+            height: 32px;
+        }
+
+        /* White Cards */
+        .card {
+            background: white;
+            border-radius: 20px;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .card-section {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .card-title {
+            font-size: 16px;
+            font-weight: 600;
+            color: black;
+        }
+
+        .card-description {
+            font-size: 16px;
+            font-weight: 500;
+            color: rgba(0, 0, 0, 0.35);
+            line-height: 1.2;
+        }
+
+        .card-divider {
+            height: 1px;
+            background: rgba(0, 0, 0, 0.1);
+            width: 100%;
+        }
+
+        /* Station List */
+        .station-slots {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .station-slot {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            cursor: pointer;
+            transition: opacity 0.2s;
+        }
+
+        .station-slot:active {
+            opacity: 0.7;
+        }
+
+        .station-badge {
+            background: rgba(0, 0, 0, 0.1);
+            width: 19px;
+            height: 19px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+
+        .station-badge-number {
+            font-size: 12px;
+            font-weight: 600;
+            color: black;
+            line-height: 16px;
+            font-feature-settings: "tnum";
+        }
+
+        .station-name {
+            flex: 1;
+            font-size: 16px;
+            font-weight: 500;
+            color: black;
+            line-height: 1.2;
+        }
+
+        .station-name.placeholder {
+            color: rgba(0, 0, 0, 0.25);
+        }
+
+        .station-remove {
+            font-size: 16px;
+            font-weight: 500;
+            color: #ff0707;
+            cursor: pointer;
+            padding: 0 5px;
+        }
+
+        /* Schedule List */
         .schedule-list {
             display: flex;
             flex-direction: column;
-            gap: 12px;
+            gap: 20px;
         }
 
         .schedule-item {
-            border: 1px solid #dee2e6;
-            border-radius: 4px;
-            padding: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            cursor: pointer;
+            transition: opacity 0.2s;
         }
 
-        .schedule-header {
+        .schedule-item:active {
+            opacity: 0.7;
+        }
+
+        .schedule-info {
             display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 8px;
+            flex-direction: column;
+            gap: 5px;
+            flex: 1;
+        }
+
+        .schedule-meta {
+            font-size: 16px;
+            font-weight: 500;
+            color: rgba(0, 0, 0, 0.35);
+            line-height: 1.2;
         }
 
         .schedule-route {
+            font-size: 16px;
             font-weight: 600;
-            font-size: 14px;
+            color: black;
+            line-height: 1.2;
         }
 
-        .schedule-details {
-            font-size: 13px;
-            color: #6c757d;
+        .schedule-remove {
+            font-size: 16px;
+            font-weight: 500;
+            color: #ff0707;
+            cursor: pointer;
+            padding: 0 5px;
         }
 
-        .schedule-actions {
-            display: flex;
-            gap: 6px;
+        .create-route-btn {
+            font-size: 16px;
+            font-weight: 500;
+            color: #0055ff;
+            background: none;
+            border: none;
+            cursor: pointer;
+            text-align: left;
+            padding: 0;
         }
 
-        .btn-edit {
-            background: #007bff;
+        .create-route-btn:active {
+            opacity: 0.7;
+        }
+
+        /* About Section */
+        .about-link {
+            font-size: 16px;
+            font-weight: 500;
+            color: #0055ff;
+            text-decoration: none;
+            display: inline-block;
+        }
+
+        .about-muted-link {
+            font-size: 16px;
+            font-weight: 500;
+            color: #0055ffa8;
+            text-decoration: none;
+            display: inline-block;
+        }
+
+        /* Save Button (Fixed) */
+        .save-button-container {
+            position: fixed;
+            bottom: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 100%;
+            max-width: 428px;
+            padding: 0px;
+            pointer-events: none;
+        }
+
+        .save-button {
+            background: #52d694;
             color: white;
             border: none;
-            padding: 4px 10px;
-            border-radius: 4px;
-            font-size: 12px;
+            border-radius: 20px;
+            padding: 20px;
+            font-size: 24px;
+            font-weight: 600;
+            line-height: 24px;
+            width: 100%;
             cursor: pointer;
+            pointer-events: all;
+            transition: transform 0.2s;
         }
 
-        .btn-remove {
-            background: #dc3545;
-            color: white;
-            border: none;
-            padding: 4px 10px;
-            border-radius: 4px;
-            font-size: 12px;
-            cursor: pointer;
+        .save-button:active {
+            transform: scale(0.98);
         }
 
-        .modal-overlay {
+        /* Bottom Sheet Drawer */
+        .drawer-overlay {
             display: none;
             position: fixed;
             top: 0;
             left: 0;
             right: 0;
             bottom: 0;
-            background: rgba(0, 0, 0, 0.5);
+            background: rgba(0, 0, 0, 0.4);
             z-index: 1000;
-            overflow-y: auto;
+            opacity: 0;
+            transition: opacity 0.3s ease;
         }
 
-        .modal-overlay.active {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            padding: 16px;
+        .drawer-overlay.active {
+            display: block;
+            opacity: 1;
         }
 
-        .modal-content {
+        .drawer {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
             background: white;
-            border-radius: 8px;
-            max-width: 500px;
-            width: 100%;
-            max-height: 90vh;
-            overflow-y: auto;
-            box-shadow: 0 4px 16px rgba(0,0,0,0.2);
-        }
-
-        .modal-header {
-            padding: 16px;
-            border-bottom: 1px solid #dee2e6;
+            border-radius: 20px 20px 0 0;
+            max-height: 80vh;
+            transform: translateY(100%);
+            transition: transform 0.3s ease;
+            z-index: 1001;
             display: flex;
-            justify-content: space-between;
-            align-items: center;
+            flex-direction: column;
         }
 
-        .modal-title {
-            font-size: 18px;
+        .drawer.active {
+            transform: translateY(0);
+        }
+
+        .drawer-header {
+            padding: 12px 20px;
+            border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+            flex-shrink: 0;
+        }
+
+        .drawer-title {
+            font-size: 20px;
             font-weight: 600;
+            color: black;
         }
 
-        .modal-close {
-            background: none;
-            border: none;
-            font-size: 24px;
-            color: #6c757d;
-            cursor: pointer;
-            padding: 0;
-            width: 32px;
-            height: 32px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-
-        .modal-body {
-            padding: 16px;
-        }
-
-        .modal-footer {
-            padding: 16px;
-            border-top: 1px solid #dee2e6;
-            display: flex;
-            gap: 8px;
-        }
-
-        .btn-secondary {
-            background: #6c757d;
-            color: white;
-            padding: 10px 16px;
-            border: none;
-            border-radius: 4px;
-            font-size: 14px;
-            cursor: pointer;
+        .drawer-content {
+            padding: 20px;
+            overflow-y: auto;
             flex: 1;
         }
 
-        .btn-save {
-            background: #28a745;
-            color: white;
-            padding: 10px 16px;
-            border: none;
-            border-radius: 4px;
-            font-size: 14px;
-            font-weight: 500;
-            cursor: pointer;
-            flex: 2;
-        }
-
-        .btn {
-            padding: 12px;
-            border: none;
-            border-radius: 4px;
-            font-size: 15px;
-            font-weight: 500;
-            cursor: pointer;
+        /* Station Search Drawer */
+        .search-box {
             width: 100%;
-            margin-top: 8px;
+            padding: 12px 16px;
+            border: 1px solid rgba(0, 0, 0, 0.15);
+            border-radius: 12px;
+            font-size: 16px;
+            font-family: 'Inter', sans-serif;
+            margin-bottom: 16px;
         }
 
-        .btn-primary {
-            background: #007bff;
-            color: white;
+        .search-box:focus {
+            outline: none;
+            border-color: #0055ff;
         }
 
-        .btn-success {
-            background: #28a745;
-            color: white;
+        .station-search-list {
+            display: flex;
+            flex-direction: column;
+            gap: 0;
         }
 
+        .station-search-item {
+            padding: 16px 0px;
+            border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 500;
+            color: black;
+            transition: background 0.15s;
+        }
+
+        .station-search-item:active {
+            background: rgba(0, 85, 255, 0.08);
+        }
+
+        .station-search-item.disabled {
+            color: rgba(0, 0, 0, 0.25);
+            cursor: not-allowed;
+        }
+
+        .station-search-item.disabled:active {
+            background: transparent;
+        }
+
+        .no-results {
+            text-align: center;
+            padding: 40px 20px;
+            color: rgba(0, 0, 0, 0.35);
+            font-size: 15px;
+        }
+
+        /* Schedule Form Drawer */
         .form-group {
-            margin-bottom: 12px;
+            margin-bottom: 20px;
         }
 
         .form-label {
             display: block;
-            font-weight: 500;
-            margin-bottom: 6px;
             font-size: 14px;
+            font-weight: 600;
+            color: black;
+            margin-bottom: 8px;
         }
 
         select, input[type="time"] {
             width: 100%;
-            padding: 8px;
-            border: 1px solid #ced4da;
-            border-radius: 4px;
-            font-size: 14px;
+            padding: 12px 16px;
+            border: 1px solid rgba(0, 0, 0, 0.15);
+            border-radius: 12px;
+            font-size: 16px;
+            font-family: 'Inter', sans-serif;
+            background: white;
+        }
+
+        select:focus, input[type="time"]:focus {
+            outline: none;
+            border-color: #0055ff;
         }
 
         .day-selector {
             display: flex;
-            gap: 6px;
+            gap: 8px;
             flex-wrap: wrap;
         }
 
         .day-btn {
-            padding: 8px 12px;
-            border: 2px solid #dee2e6;
-            background: white;
-            border-radius: 4px;
-            font-size: 13px;
-            cursor: pointer;
             flex: 1;
-            min-width: 40px;
-            text-align: center;
+            min-width: 45px;
+            padding: 10px 8px;
+            border: 2px solid rgba(0, 0, 0, 0.15);
+            background: white;
+            border-radius: 10px;
+            font-size: 14px;
+            font-weight: 500;
+            color: black;
+            cursor: pointer;
+            transition: all 0.2s;
         }
 
         .day-btn.active {
-            background: #007bff;
+            background: #0055ff;
             color: white;
-            border-color: #007bff;
+            border-color: #0055ff;
         }
 
-        .simple-templates {
-            display: grid;
-            grid-template-columns: 1fr;
-            gap: 8px;
+        .form-error {
+            color: #ff0707;
+            font-size: 13px;
+            margin-top: 6px;
+            display: none;
         }
 
-        .template-btn {
-            padding: 12px;
-            border: 2px solid #dee2e6;
+        .form-error.show {
+            display: block;
+        }
+
+        .form-group.error select,
+        .form-group.error input {
+            border-color: #ff0707;
+        }
+
+        .drawer-actions {
+            display: flex;
+            gap: 12px;
+            margin-top: 24px;
+        }
+
+        .btn-secondary {
+            flex: 1;
+            padding: 14px;
+            border: 2px solid rgba(0, 0, 0, 0.15);
             background: white;
-            border-radius: 4px;
-            font-size: 14px;
+            border-radius: 12px;
+            font-size: 16px;
+            font-weight: 600;
+            color: black;
             cursor: pointer;
-            text-align: left;
         }
 
-        .template-btn:active {
-            background: #f8f9fa;
+        .btn-primary {
+            flex: 2;
+            padding: 14px;
+            border: none;
+            background: #0055ff;
+            border-radius: 12px;
+            font-size: 16px;
+            font-weight: 600;
+            color: white;
+            cursor: pointer;
         }
 
-        .save-footer {
-            position: sticky;
-            bottom: 0;
-            background: white;
-            padding: 16px;
-            box-shadow: 0 -2px 4px rgba(0,0,0,0.1);
+        .btn-primary:active, .btn-secondary:active {
+            opacity: 0.8;
         }
 
-        .hidden {
-            display: none !important;
-        }
-
-        .loading {
-            text-align: center;
-            padding: 20px;
-            color: #6c757d;
-        }
-
+        /* Toast */
         .toast {
             position: fixed;
-            top: 16px;
+            top: 20px;
             left: 50%;
             transform: translateX(-50%);
-            background: #dc3545;
+            background: rgba(0, 0, 0, 0.9);
             color: white;
-            padding: 12px 20px;
-            border-radius: 6px;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-            z-index: 3000;
-            max-width: 90%;
-            font-size: 14px;
-            line-height: 1.4;
+            padding: 14px 24px;
+            border-radius: 12px;
+            font-size: 15px;
+            font-weight: 500;
+            z-index: 2000;
             opacity: 0;
             transition: opacity 0.3s ease;
-            pointer-events: none;
+            max-width: 90%;
+            text-align: center;
         }
 
         .toast.show {
             opacity: 1;
         }
 
-        .error-message {
-            color: #dc3545;
-            font-size: 13px;
-            margin-top: 4px;
-            display: none;
+        /* Loading State */
+        .loading {
+            text-align: center;
+            padding: 20px;
+            color: rgba(0, 0, 0, 0.35);
+            font-size: 15px;
         }
 
-        .error-message.show {
-            display: block;
-        }
-
-        .form-group.error select,
-        .form-group.error input {
-            border-color: #dc3545;
+        /* Hidden */
+        .hidden {
+            display: none !important;
         }
     </style>
 </head>
 <body>
-    <!-- Toast notification -->
+    <!-- Toast -->
     <div class="toast" id="toast"></div>
-    <div class="header">
-        <h1>🚂 NMBS Configuration</h1>
-        <div class="subtitle">Customize stations and schedules</div>
+
+    <!-- Main Container -->
+    <div class="container">
+        <!-- Header -->
+        <div class="header-card">
+            <div class="header-title">Commuter</div>
+            <div class="header-icon">
+                <svg xmlns="http://www.w3.org/2000/svg" width="124" height="33" viewBox="0 0 124 33" fill="none">
+  <path d="M1.55859 21.4456L8.0387 1.51306H129.402V31.4528H1.55859V21.4456Z" fill="white" style="fill:white;fill-opacity:1;"/>
+  <line x1="1.57693" y1="21.3974" x2="8.53214" y2="0.52573" stroke="black" style="stroke:black;stroke-opacity:1;" stroke-width="3"/>
+  <line x1="24.5769" y1="21.3974" x2="31.5321" y2="0.52573" stroke="black" style="stroke:black;stroke-opacity:1;" stroke-width="3"/>
+  <line x1="30.6006" y1="19.8839" x2="35.3428" y2="5.65327" stroke="black" style="stroke:black;stroke-opacity:1;" stroke-width="2"/>
+  <line x1="40.4822" y1="20.5846" x2="40.4822" y2="5.5846" stroke="black" style="stroke:black;stroke-opacity:1;" stroke-width="2"/>
+  <line x1="70.2822" y1="20.9694" x2="70.2822" y2="5.96936" stroke="black" style="stroke:black;stroke-opacity:1;" stroke-width="2"/>
+  <line x1="45.3301" y1="32.6478" x2="45.3301" y2="5.17861" stroke="black" style="stroke:black;stroke-opacity:1;" stroke-width="2"/>
+  <line x1="65.6775" y1="32.6478" x2="65.6775" y2="5.17861" stroke="black" style="stroke:black;stroke-opacity:1;" stroke-width="2"/>
+  <line x1="55.4001" y1="32.6478" x2="55.4001" y2="5.17861" stroke="black" style="stroke:black;stroke-opacity:1;" stroke-width="2"/>
+  <line x1="41.4822" y1="6.17859" x2="34.3882" y2="6.17859" stroke="black" style="stroke:black;stroke-opacity:1;" stroke-width="2"/>
+  <line x1="123.39" y1="6.17859" x2="69.2823" y2="6.17859" stroke="black" style="stroke:black;stroke-opacity:1;" stroke-width="2"/>
+  <line x1="65.7988" y1="6.17859" x2="46.33" y2="6.17859" stroke="black" style="stroke:black;stroke-opacity:1;" stroke-width="2"/>
+  <line x1="41.4822" y1="20.3553" x2="29.7135" y2="20.3553" stroke="black" style="stroke:black;stroke-opacity:1;" stroke-width="2"/>
+  <line x1="123.39" y1="20.3553" x2="69.2823" y2="20.3553" stroke="black" style="stroke:black;stroke-opacity:1;" stroke-width="2"/>
+  <line x1="1.5" y1="33" x2="1.5" y2="21" stroke="black" style="stroke:black;stroke-opacity:1;" stroke-width="3"/>
+  <line x1="2.65088" y1="21.5" x2="25.5047" y2="21.5" stroke="black" style="stroke:black;stroke-opacity:1;" stroke-width="3"/>
+  <line x1="7" y1="1.5" x2="123.39" y2="1.5" stroke="black" style="stroke:black;stroke-opacity:1;" stroke-width="3"/>
+  <line y1="31.5" x2="125.278" y2="31.5" stroke="black" style="stroke:black;stroke-opacity:1;" stroke-width="3"/>
+  <line x1="24.5" y1="32.6478" x2="24.5" y2="21.3753" stroke="black" style="stroke:black;stroke-opacity:1;" stroke-width="3"/>
+</svg>
+            </div>
+        </div>
+
+        <!-- Favorite Stations Card -->
+        <div class="card">
+            <div class="card-section">
+                <div class="card-title">Favourite stations</div>
+                <div class="card-description">Select up to 6 favourite stations — home, work, uni, cities you like to visit, etc. You will be able to plot routes between them on your watch.</div>
+            </div>
+            <div class="card-divider"></div>
+            <div class="station-slots" id="stationSlots">
+                <!-- Station slots will be rendered here -->
+            </div>
+        </div>
+
+        <!-- Scheduled Routes Card -->
+        <div class="card">
+            <div class="card-section">
+                <div class="card-title">Scheduled routes</div>
+                <div class="card-description">Save your regular commutes here to always see relevant connections. If you open the app during a specified time slot, it will automatically show the specified route.</div>
+            </div>
+            <div class="card-divider"></div>
+            <div class="schedule-list" id="scheduleList">
+                <!-- Schedules will be rendered here -->
+            </div>
+            <button class="create-route-btn" onclick="openScheduleDrawer()">Create a route +</button>
+        </div>
+
+        <!-- About Card -->
+        <div class="card">
+            <div class="card-section">
+                <div class="card-title">About</div>
+                <div class="card-description">Commuter is made by <a href="https://werknaam.be" class="about-muted-link" target="_blank">Werknaam</a> in Leuven. Data is provided by <a href="https://docs.irail.be" class="about-muted-link" target="_blank">iRail</a>.</div>
+                <a href="https://github.com/gbougakov/commuter-pebble" class="about-link" target="_blank">Source code on GitHub →</a>
+            </div>
+        </div>
     </div>
 
-    <div class="active-route none" id="activeRoute">
-        ⏰ No active schedule
+    <!-- Save Button (Fixed) -->
+    <div class="save-button-container">
+        <button class="save-button" onclick="saveConfig()">Save settings</button>
     </div>
 
-    <!-- Favorite Stations Section -->
-    <div class="section">
-        <div class="section-header">📍 Favorite Stations</div>
-        <div class="section-content">
-            <div class="station-count" id="stationCount">Select up to 6 stations (0/6 selected)</div>
-            <input type="text" class="search-box" id="stationSearch" placeholder="Search stations...">
-            <div class="station-list" id="stationList">
+    <!-- Station Search Drawer -->
+    <div class="drawer-overlay" id="stationDrawerOverlay" onclick="closeStationDrawer()"></div>
+    <div class="drawer" id="stationDrawer">
+        <div class="drawer-content">
+            <input type="text" class="search-box" id="stationSearch" placeholder="Search stations..." oninput="filterStations()">
+            <div class="station-search-list" id="stationSearchList">
                 <div class="loading">Loading stations...</div>
             </div>
         </div>
     </div>
 
-    <!-- Smart Schedules Section -->
-    <div class="section">
-        <div class="section-header">⏱️ Smart Schedules</div>
-        <div class="section-content">
-            <div class="schedule-list" id="scheduleList">
-                <!-- Schedules will be listed here -->
-            </div>
-            <button class="btn btn-primary" onclick="addSchedule()">+ Add Schedule</button>
+    <!-- Schedule Editor Drawer -->
+    <div class="drawer-overlay" id="scheduleDrawerOverlay" onclick="closeScheduleDrawer()"></div>
+    <div class="drawer" id="scheduleDrawer">
+        <div class="drawer-header">
+            <div class="drawer-title" id="scheduleDrawerTitle">Create route</div>
         </div>
-    </div>
-
-    <div class="save-footer">
-        <button class="btn btn-success" onclick="saveConfig()">💾 Save Configuration</button>
-    </div>
-
-    <!-- Schedule Editor Modal -->
-    <div class="modal-overlay" id="scheduleModal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <div class="modal-title" id="modalTitle">Edit Schedule</div>
-                <button class="modal-close" onclick="closeScheduleModal()">&times;</button>
+        <div class="drawer-content">
+            <div class="form-group" id="formGroupFrom">
+                <label class="form-label">From Station</label>
+                <select id="editFromStation">
+                    <option value="">Select station...</option>
+                </select>
+                <div class="form-error" id="errorFrom"></div>
             </div>
-            <div class="modal-body">
-                <div class="form-group" id="formGroupFrom">
-                    <label class="form-label">From Station</label>
-                    <select id="editFromStation">
-                        <option value="">Select station...</option>
-                    </select>
-                    <div class="error-message" id="errorFrom"></div>
-                </div>
 
-                <div class="form-group" id="formGroupTo">
-                    <label class="form-label">To Station</label>
-                    <select id="editToStation">
-                        <option value="">Select station...</option>
-                    </select>
-                    <div class="error-message" id="errorTo"></div>
-                </div>
-
-                <div class="form-group" id="formGroupDays">
-                    <label class="form-label">Days</label>
-                    <div class="day-selector">
-                        <button type="button" class="day-btn" data-day="1" onclick="toggleDay(1)">Mon</button>
-                        <button type="button" class="day-btn" data-day="2" onclick="toggleDay(2)">Tue</button>
-                        <button type="button" class="day-btn" data-day="3" onclick="toggleDay(3)">Wed</button>
-                        <button type="button" class="day-btn" data-day="4" onclick="toggleDay(4)">Thu</button>
-                        <button type="button" class="day-btn" data-day="5" onclick="toggleDay(5)">Fri</button>
-                        <button type="button" class="day-btn" data-day="6" onclick="toggleDay(6)">Sat</button>
-                        <button type="button" class="day-btn" data-day="0" onclick="toggleDay(0)">Sun</button>
-                    </div>
-                    <div class="error-message" id="errorDays"></div>
-                </div>
-
-                <div class="form-group" id="formGroupTime">
-                    <label class="form-label">Start Time</label>
-                    <input type="time" id="editStartTime" value="07:00">
-                </div>
-
-                <div class="form-group">
-                    <label class="form-label">End Time</label>
-                    <input type="time" id="editEndTime" value="09:00">
-                    <div class="error-message" id="errorTime"></div>
-                </div>
+            <div class="form-group" id="formGroupTo">
+                <label class="form-label">To Station</label>
+                <select id="editToStation">
+                    <option value="">Select station...</option>
+                </select>
+                <div class="form-error" id="errorTo"></div>
             </div>
-            <div class="modal-footer">
-                <button class="btn-secondary" onclick="closeScheduleModal()">Cancel</button>
-                <button class="btn-save" onclick="saveScheduleEdit()">Save Schedule</button>
+
+            <div class="form-group" id="formGroupDays">
+                <label class="form-label">Days</label>
+                <div class="day-selector">
+                    <button type="button" class="day-btn" data-day="1" onclick="toggleDay(1)">Mon</button>
+                    <button type="button" class="day-btn" data-day="2" onclick="toggleDay(2)">Tue</button>
+                    <button type="button" class="day-btn" data-day="3" onclick="toggleDay(3)">Wed</button>
+                    <button type="button" class="day-btn" data-day="4" onclick="toggleDay(4)">Thu</button>
+                    <button type="button" class="day-btn" data-day="5" onclick="toggleDay(5)">Fri</button>
+                    <button type="button" class="day-btn" data-day="6" onclick="toggleDay(6)">Sat</button>
+                    <button type="button" class="day-btn" data-day="0" onclick="toggleDay(0)">Sun</button>
+                </div>
+                <div class="form-error" id="errorDays"></div>
+            </div>
+
+            <div class="form-group" id="formGroupTime">
+                <label class="form-label">Start Time</label>
+                <input type="time" id="editStartTime" value="07:00">
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">End Time</label>
+                <input type="time" id="editEndTime" value="09:00">
+                <div class="form-error" id="errorTime"></div>
+            </div>
+
+            <div class="drawer-actions">
+                <button class="btn-secondary" onclick="closeScheduleDrawer()">Cancel</button>
+                <button class="btn-primary" onclick="saveSchedule()">Save route</button>
             </div>
         </div>
     </div>
@@ -528,12 +670,19 @@
         var smartSchedules = [];
         var maxStations = 6;
 
-        // Schedule editor state
-        var editingScheduleIndex = -1;  // -1 = creating new, >=0 = editing existing
-        var editingScheduleDays = [];   // Currently selected days in editor
+        // UI state
+        var editingScheduleIndex = -1;
+        var editingScheduleDays = [];
+        var selectedStationSlot = -1;
 
         // Day names
         var dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+        // Initialize
+        window.onload = function() {
+            loadStations();
+            loadConfig();
+        };
 
         // Toast notification
         var toastTimer = null;
@@ -542,66 +691,24 @@
             toast.textContent = message;
             toast.classList.add('show');
 
-            if (toastTimer) {
-                clearTimeout(toastTimer);
-            }
-
+            if (toastTimer) clearTimeout(toastTimer);
             toastTimer = setTimeout(function() {
                 toast.classList.remove('show');
             }, 3000);
         }
 
-        // Show inline error
-        function showError(fieldId, message) {
-            var errorEl = document.getElementById('error' + fieldId);
-            var formGroup = document.getElementById('formGroup' + fieldId);
-
-            if (errorEl) {
-                errorEl.textContent = message;
-                errorEl.classList.add('show');
-            }
-
-            if (formGroup) {
-                formGroup.classList.add('error');
-            }
-        }
-
-        // Clear all errors
-        function clearErrors() {
-            var errors = document.querySelectorAll('.error-message');
-            for (var i = 0; i < errors.length; i++) {
-                errors[i].classList.remove('show');
-                errors[i].textContent = '';
-            }
-
-            var formGroups = document.querySelectorAll('.form-group');
-            for (var j = 0; j < formGroups.length; j++) {
-                formGroups[j].classList.remove('error');
-            }
-        }
-
-        // Initialize
-        window.onload = function() {
-            loadStations();
-            loadConfig();
-            updateActiveRoute();
-        };
-
-        // Load stations from API and cache
+        // Load stations from API
         function loadStations() {
-            // Try localStorage first
             var cached = localStorage.getItem('nmbs_station_cache');
             if (cached) {
                 try {
                     stationCache = JSON.parse(cached);
                     console.log('Loaded ' + stationCache.length + ' cached stations');
-                    renderStationList();
                 } catch (e) {
                     console.log('Error parsing cached stations');
                 }
             }
 
-            // Fetch fresh list
             var xhr = new XMLHttpRequest();
             xhr.open('GET', 'https://api.irail.be/v1/stations?format=json', true);
             xhr.onload = function() {
@@ -618,7 +725,6 @@
                             });
                             localStorage.setItem('nmbs_station_cache', JSON.stringify(stationCache));
                             console.log('Fetched ' + stationCache.length + ' stations');
-                            renderStationList();
                         }
                     } catch (e) {
                         console.log('Error parsing stations API');
@@ -634,30 +740,70 @@
                 var favJson = localStorage.getItem('nmbs_favorite_stations');
                 if (favJson) {
                     favoriteStations = JSON.parse(favJson);
-                    console.log('Loaded ' + favoriteStations.length + ' favorite stations');
                 }
 
                 var schedJson = localStorage.getItem('nmbs_smart_schedules');
                 if (schedJson) {
                     smartSchedules = JSON.parse(schedJson);
-                    console.log('Loaded ' + smartSchedules.length + ' smart schedules');
-                    renderScheduleList();
                 }
+
+                renderStationSlots();
+                renderScheduleList();
             } catch (e) {
                 console.log('Error loading config: ' + e.message);
             }
         }
 
-        // Render station list
-        function renderStationList() {
-            var listEl = document.getElementById('stationList');
+        // Render station slots (numbered 1-6)
+        function renderStationSlots() {
+            var html = '';
+            for (var i = 0; i < maxStations; i++) {
+                var stationId = favoriteStations[i];
+                var stationName = stationId ? getStationName(stationId) : 'Tap to add a station';
+                var isPlaceholder = !stationId;
+
+                html += '<div class="station-slot" onclick="openStationDrawer(' + i + ')">';
+                html += '<div class="station-badge"><div class="station-badge-number">' + (i + 1) + '</div></div>';
+                html += '<div class="station-name' + (isPlaceholder ? ' placeholder' : '') + '">' + stationName + '</div>';
+
+                if (!isPlaceholder) {
+                    html += '<div class="station-remove" onclick="removeStation(' + i + '); event.stopPropagation();">✗</div>';
+                }
+
+                html += '</div>';
+            }
+            document.getElementById('stationSlots').innerHTML = html;
+        }
+
+        // Open station drawer for slot
+        function openStationDrawer(slotIndex) {
+            selectedStationSlot = slotIndex;
+            renderStationSearchList();
+
+            document.getElementById('stationDrawerOverlay').classList.add('active');
+            setTimeout(function() {
+                document.getElementById('stationDrawer').classList.add('active');
+            }, 10);
+        }
+
+        // Close station drawer
+        function closeStationDrawer() {
+            document.getElementById('stationDrawer').classList.remove('active');
+            setTimeout(function() {
+                document.getElementById('stationDrawerOverlay').classList.remove('active');
+            }, 300);
+        }
+
+        // Render station search list
+        function renderStationSearchList() {
             if (stationCache.length === 0) {
-                listEl.innerHTML = '<div class="loading">No stations available</div>';
+                document.getElementById('stationSearchList').innerHTML = '<div class="loading">Loading stations...</div>';
                 return;
             }
 
             var html = '';
             var searchTerm = document.getElementById('stationSearch').value.toLowerCase();
+            var hasResults = false;
 
             for (var i = 0; i < stationCache.length; i++) {
                 var station = stationCache[i];
@@ -667,81 +813,38 @@
                     continue;
                 }
 
-                var isChecked = favoriteStations.indexOf(station.id) !== -1;
-                var isDisabled = !isChecked && favoriteStations.length >= maxStations;
+                hasResults = true;
+                var isAlreadyAdded = favoriteStations.indexOf(station.id) !== -1 && favoriteStations[selectedStationSlot] !== station.id;
 
-                html += '<div class="station-item' + (isDisabled ? ' disabled' : '') + '">';
-                html += '<input type="checkbox" ' +
-                        'id="station_' + i + '" ' +
-                        (isChecked ? 'checked ' : '') +
-                        (isDisabled ? 'disabled ' : '') +
-                        'onchange="toggleStation(\'' + station.id + '\')">';
-                html += '<label for="station_' + i + '">' + station.name + '</label>';
+                html += '<div class="station-search-item' + (isAlreadyAdded ? ' disabled' : '') + '" onclick="' + (isAlreadyAdded ? '' : 'selectStation(\'' + station.id + '\')') + '">';
+                html += station.name;
                 html += '</div>';
             }
 
-            listEl.innerHTML = html;
-            updateStationCount();
+            if (!hasResults) {
+                html = '<div class="no-results">No stations found</div>';
+            }
+
+            document.getElementById('stationSearchList').innerHTML = html;
         }
 
-        // Toggle station selection
-        function toggleStation(stationId) {
-            var index = favoriteStations.indexOf(stationId);
-            if (index !== -1) {
-                favoriteStations.splice(index, 1);
-            } else {
-                if (favoriteStations.length < maxStations) {
-                    favoriteStations.push(stationId);
-                }
-            }
-            renderStationList();
+        // Filter stations as user types
+        function filterStations() {
+            renderStationSearchList();
         }
 
-        // Update station count display
-        function updateStationCount() {
-            var countEl = document.getElementById('stationCount');
-            countEl.textContent = 'Select up to ' + maxStations + ' stations (' +
-                                   favoriteStations.length + '/' + maxStations + ' selected)';
+        // Select station for current slot
+        function selectStation(stationId) {
+            favoriteStations[selectedStationSlot] = stationId;
+            renderStationSlots();
+            closeStationDrawer();
+            document.getElementById('stationSearch').value = '';
         }
 
-        // Station search
-        document.addEventListener('DOMContentLoaded', function() {
-            var searchBox = document.getElementById('stationSearch');
-            if (searchBox) {
-                searchBox.addEventListener('input', function() {
-                    renderStationList();
-                });
-            }
-        });
-
-        // Render schedule list (advanced mode)
-        function renderScheduleList() {
-            var html = '';
-            if (smartSchedules.length === 0) {
-                html = '<div class="loading">No schedules configured</div>';
-            } else {
-                for (var i = 0; i < smartSchedules.length; i++) {
-                    var sched = smartSchedules[i];
-                    var fromName = getStationName(sched.fromId);
-                    var toName = getStationName(sched.toId);
-                    var daysText = getDaysText(sched.days);
-
-                    html += '<div class="schedule-item">';
-                    html += '<div class="schedule-header">';
-                    html += '<div class="schedule-route">' + fromName + ' → ' + toName + '</div>';
-                    html += '<div class="schedule-actions">';
-                    html += '<button class="btn-edit" onclick="editSchedule(' + i + ')">Edit</button>';
-                    html += '<button class="btn-remove" onclick="removeSchedule(' + i + ')">Remove</button>';
-                    html += '</div>';
-                    html += '</div>';
-                    html += '<div class="schedule-details">' +
-                            daysText + ' • ' +
-                            sched.startTime + ' - ' + sched.endTime +
-                            '</div>';
-                    html += '</div>';
-                }
-            }
-            document.getElementById('scheduleList').innerHTML = html;
+        // Remove station from slot
+        function removeStation(slotIndex) {
+            favoriteStations.splice(slotIndex, 1);
+            renderStationSlots();
         }
 
         // Get station name by ID
@@ -752,6 +855,40 @@
                 }
             }
             return id;
+        }
+
+        // Render schedule list
+        function renderScheduleList() {
+            var scheduleListEl = document.getElementById('scheduleList');
+
+            if (smartSchedules.length === 0) {
+                // Hide the schedule list if there are no schedules
+                scheduleListEl.style.display = 'none';
+                return;
+            }
+
+            // Show the schedule list
+            scheduleListEl.style.display = 'flex';
+
+            var html = '';
+
+            for (var i = 0; i < smartSchedules.length; i++) {
+                var sched = smartSchedules[i];
+                var fromName = getStationName(sched.fromId);
+                var toName = getStationName(sched.toId);
+                var daysText = getDaysText(sched.days);
+                var timeText = sched.startTime + '–' + sched.endTime;
+
+                html += '<div class="schedule-item" onclick="openScheduleDrawer(' + i + ')">';
+                html += '<div class="schedule-info">';
+                html += '<div class="schedule-meta">' + daysText + ' · ' + timeText + '</div>';
+                html += '<div class="schedule-route">' + fromName + ' → ' + toName + '</div>';
+                html += '</div>';
+                html += '<div class="schedule-remove" onclick="removeSchedule(' + i + '); event.stopPropagation();">✗</div>';
+                html += '</div>';
+            }
+
+            scheduleListEl.innerHTML = html;
         }
 
         // Get days text
@@ -767,131 +904,65 @@
             return names.join(', ');
         }
 
-        // Add new schedule
-        function addSchedule() {
+        // Open schedule drawer
+        function openScheduleDrawer(scheduleIndex) {
             if (favoriteStations.length < 2) {
-                showToast('Please select at least 2 favorite stations first');
+                showToast('Please add at least 2 stations first');
                 return;
             }
 
-            // Open modal in "create" mode
-            editingScheduleIndex = -1;
-            openScheduleModal({
-                fromId: favoriteStations[0],
-                toId: favoriteStations[1],
-                days: [1, 2, 3, 4, 5],  // Weekdays by default
-                startTime: '07:00',
-                endTime: '09:00'
-            });
-        }
+            clearFormErrors();
 
-        // Edit existing schedule
-        function editSchedule(index) {
-            editingScheduleIndex = index;
-            openScheduleModal(smartSchedules[index]);
-        }
-
-        // Remove schedule
-        function removeSchedule(index) {
-            smartSchedules.splice(index, 1);
-            renderScheduleList();
-            updateActiveRoute();
-        }
-
-        // Update active route display
-        function updateActiveRoute() {
-            var activeEl = document.getElementById('activeRoute');
-            var activeRoute = evaluateSchedules();
-
-            if (activeRoute) {
-                var fromName = getStationName(activeRoute.fromId);
-                var toName = getStationName(activeRoute.toId);
-                activeEl.textContent = '✓ Active Now: ' + fromName + ' → ' + toName;
-                activeEl.className = 'active-route';
+            if (typeof scheduleIndex === 'number') {
+                // Edit existing schedule
+                editingScheduleIndex = scheduleIndex;
+                var sched = smartSchedules[scheduleIndex];
+                document.getElementById('scheduleDrawerTitle').textContent = 'Edit route';
+                document.getElementById('editFromStation').value = sched.fromId;
+                document.getElementById('editToStation').value = sched.toId;
+                document.getElementById('editStartTime').value = sched.startTime;
+                document.getElementById('editEndTime').value = sched.endTime;
+                editingScheduleDays = sched.days.slice();
             } else {
-                activeEl.textContent = '⏰ No active schedule';
-                activeEl.className = 'active-route none';
+                // Create new schedule
+                editingScheduleIndex = -1;
+                document.getElementById('scheduleDrawerTitle').textContent = 'Create route';
+                document.getElementById('editFromStation').value = favoriteStations[0] || '';
+                document.getElementById('editToStation').value = favoriteStations[1] || '';
+                document.getElementById('editStartTime').value = '07:00';
+                document.getElementById('editEndTime').value = '09:00';
+                editingScheduleDays = [1, 2, 3, 4, 5]; // Weekdays
             }
-        }
 
-        // Evaluate schedules (same logic as index.js)
-        function evaluateSchedules() {
-            var now = new Date();
-            var currentDay = now.getDay();
-            var currentTime = ('0' + now.getHours()).slice(-2) + ':' + ('0' + now.getMinutes()).slice(-2);
-
-            for (var i = 0; i < smartSchedules.length; i++) {
-                var schedule = smartSchedules[i];
-                if (!schedule.enabled) continue;
-
-                var dayMatches = schedule.days.indexOf(currentDay) !== -1;
-                if (!dayMatches) continue;
-
-                if (currentTime >= schedule.startTime && currentTime <= schedule.endTime) {
-                    return {fromId: schedule.fromId, toId: schedule.toId};
-                }
-            }
-            return null;
-        }
-
-        // Get return URL parameter
-        function getQueryParam(variable, defaultValue) {
-            var query = location.search.substring(1);
-            var vars = query.split('&');
-            for (var i = 0; i < vars.length; i++) {
-                var pair = vars[i].split('=');
-                if (pair[0] === variable) {
-                    return decodeURIComponent(pair[1]);
-                }
-            }
-            return defaultValue || false;
-        }
-
-        // Open schedule editor modal
-        function openScheduleModal(scheduleData) {
-            // Clear any previous errors
-            clearErrors();
-
-            // Set modal title
-            var modalTitle = document.getElementById('modalTitle');
-            modalTitle.textContent = editingScheduleIndex === -1 ? 'Create Schedule' : 'Edit Schedule';
-
-            // Populate station dropdowns with favorite stations
             populateStationDropdowns();
-
-            // Set form values
-            document.getElementById('editFromStation').value = scheduleData.fromId || '';
-            document.getElementById('editToStation').value = scheduleData.toId || '';
-            document.getElementById('editStartTime').value = scheduleData.startTime || '07:00';
-            document.getElementById('editEndTime').value = scheduleData.endTime || '09:00';
-
-            // Set days
-            editingScheduleDays = scheduleData.days ? scheduleData.days.slice() : [1, 2, 3, 4, 5];
             updateDayButtons();
 
-            // Show modal
-            document.getElementById('scheduleModal').classList.add('active');
+            document.getElementById('scheduleDrawerOverlay').classList.add('active');
+            setTimeout(function() {
+                document.getElementById('scheduleDrawer').classList.add('active');
+            }, 10);
         }
 
-        // Close schedule editor modal
-        function closeScheduleModal() {
-            document.getElementById('scheduleModal').classList.remove('active');
-            editingScheduleIndex = -1;
-            editingScheduleDays = [];
+        // Close schedule drawer
+        function closeScheduleDrawer() {
+            document.getElementById('scheduleDrawer').classList.remove('active');
+            setTimeout(function() {
+                document.getElementById('scheduleDrawerOverlay').classList.remove('active');
+            }, 300);
         }
 
-        // Populate station dropdowns with favorite stations
+        // Populate station dropdowns
         function populateStationDropdowns() {
             var fromSelect = document.getElementById('editFromStation');
             var toSelect = document.getElementById('editToStation');
 
-            // Clear existing options except placeholder
             fromSelect.innerHTML = '<option value="">Select station...</option>';
             toSelect.innerHTML = '<option value="">Select station...</option>';
 
-            // Add favorite stations
             for (var i = 0; i < favoriteStations.length; i++) {
                 var stationId = favoriteStations[i];
+                if (!stationId) continue;
+
                 var stationName = getStationName(stationId);
 
                 var option1 = document.createElement('option');
@@ -931,53 +1002,47 @@
             }
         }
 
-        // Save schedule edit
-        function saveScheduleEdit() {
-            // Clear previous errors
-            clearErrors();
+        // Save schedule
+        function saveSchedule() {
+            clearFormErrors();
 
-            // Get form values
             var fromId = document.getElementById('editFromStation').value;
             var toId = document.getElementById('editToStation').value;
             var startTime = document.getElementById('editStartTime').value;
             var endTime = document.getElementById('editEndTime').value;
 
-            // Validation with error messages
             var hasError = false;
 
             if (!fromId) {
-                showError('From', 'Please select a departure station');
+                showFormError('From', 'Please select a departure station');
                 hasError = true;
             }
 
             if (!toId) {
-                showError('To', 'Please select an arrival station');
+                showFormError('To', 'Please select an arrival station');
                 hasError = true;
             }
 
             if (fromId && toId && fromId === toId) {
-                showError('To', 'Stations must be different');
+                showFormError('To', 'Stations must be different');
                 hasError = true;
             }
 
             if (editingScheduleDays.length === 0) {
-                showError('Days', 'Please select at least one day');
+                showFormError('Days', 'Please select at least one day');
                 hasError = true;
             }
 
             if (!startTime || !endTime) {
-                showError('Time', 'Please enter both start and end times');
+                showFormError('Time', 'Please enter both times');
                 hasError = true;
             } else if (startTime >= endTime) {
-                showError('Time', 'End time must be after start time');
+                showFormError('Time', 'End time must be after start time');
                 hasError = true;
             }
 
-            if (hasError) {
-                return;
-            }
+            if (hasError) return;
 
-            // Create schedule object
             var schedule = {
                 id: editingScheduleIndex === -1 ? 'custom-' + Date.now() : smartSchedules[editingScheduleIndex].id,
                 fromId: fromId,
@@ -988,49 +1053,81 @@
                 enabled: true
             };
 
-            // Save to array
             if (editingScheduleIndex === -1) {
-                // Creating new schedule
                 smartSchedules.push(schedule);
             } else {
-                // Updating existing schedule
                 smartSchedules[editingScheduleIndex] = schedule;
             }
 
-            // Update UI
             renderScheduleList();
-            updateActiveRoute();
-            closeScheduleModal();
+            closeScheduleDrawer();
         }
 
-        // Close modal when clicking outside
-        document.addEventListener('click', function(e) {
-            var modal = document.getElementById('scheduleModal');
-            if (e.target === modal) {
-                closeScheduleModal();
+        // Remove schedule
+        function removeSchedule(index) {
+            smartSchedules.splice(index, 1);
+            renderScheduleList();
+        }
+
+        // Form error helpers
+        function showFormError(fieldId, message) {
+            var errorEl = document.getElementById('error' + fieldId);
+            var formGroup = document.getElementById('formGroup' + fieldId);
+
+            if (errorEl) {
+                errorEl.textContent = message;
+                errorEl.classList.add('show');
             }
-        });
+
+            if (formGroup) {
+                formGroup.classList.add('error');
+            }
+        }
+
+        function clearFormErrors() {
+            var errors = document.querySelectorAll('.form-error');
+            for (var i = 0; i < errors.length; i++) {
+                errors[i].classList.remove('show');
+            }
+
+            var formGroups = document.querySelectorAll('.form-group');
+            for (var i = 0; i < formGroups.length; i++) {
+                formGroups[i].classList.remove('error');
+            }
+        }
+
+        // Get return URL parameter
+        function getQueryParam(variable, defaultValue) {
+            var query = location.search.substring(1);
+            var vars = query.split('&');
+            for (var i = 0; i < vars.length; i++) {
+                var pair = vars[i].split('=');
+                if (pair[0] === variable) {
+                    return decodeURIComponent(pair[1]);
+                }
+            }
+            return defaultValue || false;
+        }
 
         // Save configuration
         function saveConfig() {
-            if (favoriteStations.length === 0) {
-                showToast('Please select at least one favorite station');
+            // Filter out empty slots
+            var validStations = favoriteStations.filter(function(id) { return id; });
+
+            if (validStations.length === 0) {
+                showToast('Please add at least one station');
                 return;
             }
 
             var config = {
-                favoriteStations: favoriteStations,
+                favoriteStations: validStations,
                 smartSchedules: smartSchedules
             };
 
-            // Save to localStorage
-            localStorage.setItem('nmbs_favorite_stations', JSON.stringify(favoriteStations));
+            localStorage.setItem('nmbs_favorite_stations', JSON.stringify(validStations));
             localStorage.setItem('nmbs_smart_schedules', JSON.stringify(smartSchedules));
 
-            // Determine the correct return URL (emulator vs real watch)
             var return_to = getQueryParam('return_to', 'pebblejs://close#');
-
-            // Return to Pebble app
             var configJson = JSON.stringify(config);
             document.location = return_to + encodeURIComponent(configJson);
         }
