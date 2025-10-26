@@ -18,15 +18,57 @@
 
         /* CSS */
         :root {
-        font-family: Inter, sans-serif;
-        font-feature-settings: 'liga' 1, 'calt' 1; /* fix for Chrome */
+            font-family: Inter, sans-serif;
+            font-feature-settings: 'liga' 1, 'calt' 1; /* fix for Chrome */
+
+            /* Light theme colors */
+            --bg-primary: #e8e8e8;
+            --bg-card: white;
+            --bg-drawer: white;
+            --bg-text-field: #eee;
+            --text-primary: black;
+            --text-secondary: rgba(0, 0, 0, 0.35);
+            --text-placeholder: rgba(0, 0, 0, 0.25);
+            --divider: rgba(0, 0, 0, 0.1);
+            --border: rgba(0, 0, 0, 0.15);
+            --badge-bg: rgba(0, 0, 0, 0.1);
+            --overlay: rgba(0, 0, 0, 0.4);
+            --search-item-hover: rgba(0, 85, 255, 0.08);
+            --drawer-handle: rgba(0, 0, 0, 0.15);
+
+            /* Brand colors (same in both themes) */
+            --blue: #0055ff;
+            --green: #52d694;
+            --red: #ff0707;
+            --blue-muted: #0055ffa8;
         }
+
+        /* Dark theme - OLED Black */
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --bg-primary: #000000;
+                --bg-card: #232325;
+                --bg-drawer: #232325;
+                --bg-text-field: #333;
+                --text-primary: white;
+                --text-secondary: rgba(255, 255, 255, 0.6);
+                --text-placeholder: rgba(255, 255, 255, 0.4);
+                --divider: rgba(255, 255, 255, 0.12);
+                --border: rgba(255, 255, 255, 0.2);
+                --badge-bg: rgba(255, 255, 255, 0.12);
+                --overlay: rgba(0, 0, 0, 0.85);
+                --search-item-hover: rgba(0, 85, 255, 0.25);
+                --drawer-handle: rgba(255, 255, 255, 0.3);
+                --blue-muted: #0055ffdd;
+            }
+        }
+
         @supports (font-variation-settings: normal) {
-        :root { font-family: InterVariable, sans-serif; }
+            :root { font-family: InterVariable, sans-serif; }
         }
 
         body {
-            background: #e8e8e8;
+            background: var(--bg-primary);
             padding: 0 0 100px 0;
             margin: 0;
             font-size: 16px;
@@ -72,7 +114,7 @@
 
         /* White Cards */
         .card {
-            background: white;
+            background: var(--bg-card);
             border-radius: 20px;
             padding: 20px;
             display: flex;
@@ -89,19 +131,19 @@
         .card-title {
             font-size: 16px;
             font-weight: 600;
-            color: black;
+            color: var(--text-primary);
         }
 
         .card-description {
             font-size: 16px;
             font-weight: 500;
-            color: rgba(0, 0, 0, 0.35);
+            color: var(--text-secondary);
             line-height: 1.2;
         }
 
         .card-divider {
             height: 1px;
-            background: rgba(0, 0, 0, 0.1);
+            background: var(--divider);
             width: 100%;
         }
 
@@ -125,7 +167,7 @@
         }
 
         .station-badge {
-            background: rgba(0, 0, 0, 0.1);
+            background: var(--badge-bg);
             width: 19px;
             height: 19px;
             border-radius: 50%;
@@ -138,7 +180,7 @@
         .station-badge-number {
             font-size: 12px;
             font-weight: 600;
-            color: black;
+            color: var(--text-primary);
             line-height: 16px;
             font-feature-settings: "tnum";
         }
@@ -147,18 +189,18 @@
             flex: 1;
             font-size: 16px;
             font-weight: 500;
-            color: black;
+            color: var(--text-primary);
             line-height: 1.2;
         }
 
         .station-name.placeholder {
-            color: rgba(0, 0, 0, 0.25);
+            color: var(--text-placeholder);
         }
 
         .station-remove {
             font-size: 16px;
             font-weight: 500;
-            color: #ff0707;
+            color: var(--red);
             cursor: pointer;
             padding: 0 5px;
         }
@@ -192,21 +234,21 @@
         .schedule-meta {
             font-size: 16px;
             font-weight: 500;
-            color: rgba(0, 0, 0, 0.35);
+            color: var(--text-secondary);
             line-height: 1.2;
         }
 
         .schedule-route {
             font-size: 16px;
             font-weight: 600;
-            color: black;
+            color: var(--text-primary);
             line-height: 1.2;
         }
 
         .schedule-remove {
             font-size: 16px;
             font-weight: 500;
-            color: #ff0707;
+            color: var(--red);
             cursor: pointer;
             padding: 0 5px;
         }
@@ -214,7 +256,7 @@
         .create-route-btn {
             font-size: 16px;
             font-weight: 500;
-            color: #0055ff;
+            color: var(--blue);
             background: none;
             border: none;
             cursor: pointer;
@@ -230,7 +272,7 @@
         .about-link {
             font-size: 16px;
             font-weight: 500;
-            color: #0055ff;
+            color: var(--blue);
             text-decoration: none;
             display: inline-block;
         }
@@ -238,7 +280,7 @@
         .about-muted-link {
             font-size: 16px;
             font-weight: 500;
-            color: #0055ffa8;
+            color: var(--blue-muted);
             text-decoration: none;
             display: inline-block;
         }
@@ -256,7 +298,7 @@
         }
 
         .save-button {
-            background: #52d694;
+            background: var(--green);
             color: white;
             border: none;
             border-radius: 20px;
@@ -282,7 +324,7 @@
             left: 0;
             right: 0;
             bottom: 0;
-            background: rgba(0, 0, 0, 0.4);
+            background: var(--overlay);
             z-index: 1000;
             opacity: 0;
             transition: opacity 0.3s ease;
@@ -298,7 +340,7 @@
             bottom: 0;
             left: 0;
             right: 0;
-            background: white;
+            background: var(--bg-drawer);
             border-radius: 20px 20px 0 0;
             max-height: 80vh;
             transform: translateY(100%);
@@ -314,14 +356,14 @@
 
         .drawer-header {
             padding: 12px 20px;
-            border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+            border-bottom: 1px solid var(--divider);
             flex-shrink: 0;
         }
 
         .drawer-title {
             font-size: 20px;
             font-weight: 600;
-            color: black;
+            color: var(--text-primary);
         }
 
         .drawer-content {
@@ -334,16 +376,18 @@
         .search-box {
             width: 100%;
             padding: 12px 16px;
-            border: 1px solid rgba(0, 0, 0, 0.15);
+            border: none;
             border-radius: 12px;
             font-size: 16px;
             font-family: 'Inter', sans-serif;
             margin-bottom: 16px;
+            background: var(--bg-text-field);
+            color: var(--text-primary);
         }
 
         .search-box:focus {
             outline: none;
-            border-color: #0055ff;
+            border-color: var(--blue);
         }
 
         .station-search-list {
@@ -354,20 +398,20 @@
 
         .station-search-item {
             padding: 16px 0px;
-            border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+            border-bottom: 1px solid var(--divider);
             cursor: pointer;
             font-size: 16px;
             font-weight: 500;
-            color: black;
+            color: var(--text-primary);
             transition: background 0.15s;
         }
 
         .station-search-item:active {
-            background: rgba(0, 85, 255, 0.08);
+            background: var(--search-item-hover);
         }
 
         .station-search-item.disabled {
-            color: rgba(0, 0, 0, 0.25);
+            color: var(--text-placeholder);
             cursor: not-allowed;
         }
 
@@ -378,7 +422,7 @@
         .no-results {
             text-align: center;
             padding: 40px 20px;
-            color: rgba(0, 0, 0, 0.35);
+            color: var(--text-secondary);
             font-size: 15px;
         }
 
@@ -391,23 +435,24 @@
             display: block;
             font-size: 14px;
             font-weight: 600;
-            color: black;
+            color: var(--text-primary);
             margin-bottom: 8px;
         }
 
         select, input[type="time"] {
             width: 100%;
             padding: 12px 16px;
-            border: 1px solid rgba(0, 0, 0, 0.15);
+            border: 1px solid var(--border);
             border-radius: 12px;
             font-size: 16px;
             font-family: 'Inter', sans-serif;
-            background: white;
+            background: var(--bg-card);
+            color: var(--text-primary);
         }
 
         select:focus, input[type="time"]:focus {
             outline: none;
-            border-color: #0055ff;
+            border-color: var(--blue);
         }
 
         .day-selector {
@@ -420,24 +465,24 @@
             flex: 1;
             min-width: 45px;
             padding: 10px 8px;
-            border: 2px solid rgba(0, 0, 0, 0.15);
-            background: white;
+            border: 2px solid var(--border);
+            background: var(--bg-card);
             border-radius: 10px;
             font-size: 14px;
             font-weight: 500;
-            color: black;
+            color: var(--text-primary);
             cursor: pointer;
             transition: all 0.2s;
         }
 
         .day-btn.active {
-            background: #0055ff;
+            background: var(--blue);
             color: white;
-            border-color: #0055ff;
+            border-color: var(--blue);
         }
 
         .form-error {
-            color: #ff0707;
+            color: var(--red);
             font-size: 13px;
             margin-top: 6px;
             display: none;
@@ -449,7 +494,7 @@
 
         .form-group.error select,
         .form-group.error input {
-            border-color: #ff0707;
+            border-color: var(--red);
         }
 
         .drawer-actions {
@@ -461,12 +506,12 @@
         .btn-secondary {
             flex: 1;
             padding: 14px;
-            border: 2px solid rgba(0, 0, 0, 0.15);
-            background: white;
+            border: 2px solid var(--border);
+            background: var(--bg-card);
             border-radius: 12px;
             font-size: 16px;
             font-weight: 600;
-            color: black;
+            color: var(--text-primary);
             cursor: pointer;
         }
 
@@ -474,7 +519,7 @@
             flex: 2;
             padding: 14px;
             border: none;
-            background: #0055ff;
+            background: var(--blue);
             border-radius: 12px;
             font-size: 16px;
             font-weight: 600;
@@ -513,7 +558,7 @@
         .loading {
             text-align: center;
             padding: 20px;
-            color: rgba(0, 0, 0, 0.35);
+            color: var(--text-secondary);
             font-size: 15px;
         }
 
