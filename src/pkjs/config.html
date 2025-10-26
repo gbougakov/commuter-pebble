@@ -427,60 +427,150 @@
         }
 
         /* Schedule Form Drawer */
-        .form-group {
+        .form-section {
             margin-bottom: 20px;
         }
 
-        .form-label {
-            display: block;
-            font-size: 14px;
+        .form-section-title {
+            font-size: 16px;
             font-weight: 600;
             color: var(--text-primary);
-            margin-bottom: 8px;
+            margin-bottom: 10px;
         }
 
-        select, input[type="time"] {
-            width: 100%;
-            padding: 12px 16px;
-            border: 1px solid var(--border);
+        /* Route Selector */
+        .route-selector {
+            background: var(--bg-text-field);
             border-radius: 12px;
-            font-size: 16px;
-            font-family: 'Inter', sans-serif;
-            background: var(--bg-card);
-            color: var(--text-primary);
-        }
-
-        select:focus, input[type="time"]:focus {
-            outline: none;
-            border-color: var(--blue);
-        }
-
-        .day-selector {
+            padding-left: 12px;
+            padding-right: 12px;
             display: flex;
-            gap: 8px;
-            flex-wrap: wrap;
+            gap: 10px;
+            align-items: center;
         }
 
-        .day-btn {
+        .route-indicator {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 0;
+            padding: 20px 1px;
+        }
+
+        .route-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            flex-shrink: 0;
+            border: 2px solid var(--divider);
+        }
+
+        .route-line {
+            width: 1.5px;
+            height: 36px;
+            background: var(--divider);
+        }
+
+        .route-inputs {
             flex: 1;
-            min-width: 45px;
-            padding: 10px 8px;
-            border: 2px solid var(--border);
-            background: var(--bg-card);
-            border-radius: 10px;
-            font-size: 14px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .route-select {
+            width: 100%;
+            padding: 0;
+            border: none;
+            background: transparent;
+            font-size: 16px;
             font-weight: 500;
+            font-family: 'Inter', sans-serif;
             color: var(--text-primary);
             cursor: pointer;
-            transition: all 0.2s;
         }
 
-        .day-btn.active {
+        .route-select option {
+            background: var(--bg-drawer);
+            color: var(--text-primary);
+        }
+
+        .route-select:focus {
+            outline: none;
+        }
+
+        .route-divider {
+            height: 1px;
+            background: var(--divider);
+            width: 100%;
+        }
+
+        /* Day Selector - Circular */
+        .day-selector {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-bottom: 10px;
+        }
+
+        .day-btn-circle {
+            flex: 1;
+            min-width: 39px;
+            aspect-ratio: 1;
+            padding: 10px;
+            border: none;
+            background: var(--bg-text-field);
+            border-radius: 50%;
+            font-size: 16px;
+            font-weight: 600;
+            color: var(--text-placeholder);
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .day-btn-circle.active {
             background: var(--blue);
             color: white;
-            border-color: var(--blue);
         }
 
+        .day-btn-circle:active {
+            transform: scale(0.95);
+        }
+
+        /* Time Range */
+        .time-range {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .time-input {
+            flex: 1;
+            padding: 12px 16px;
+            border: none;
+            background: var(--bg-text-field);
+            border-radius: 12px;
+            font-size: 16px;
+            font-weight: 500;
+            font-family: 'Inter', sans-serif;
+            color: var(--text-primary);
+            text-align: center;
+        }
+
+        .time-input:focus {
+            outline: none;
+        }
+
+        .time-arrow {
+            font-size: 16px;
+            font-weight: 600;
+            color: var(--text-placeholder);
+        }
+
+        /* Form Errors */
         .form-error {
             color: var(--red);
             font-size: 13px;
@@ -492,43 +582,26 @@
             display: block;
         }
 
-        .form-group.error select,
-        .form-group.error input {
-            border-color: var(--red);
+        .form-section.error .route-selector {
+            border: 1px solid var(--red);
         }
 
-        .drawer-actions {
-            display: flex;
-            gap: 12px;
-            margin-top: 24px;
-        }
-
-        .btn-secondary {
-            flex: 1;
-            padding: 14px;
-            border: 2px solid var(--border);
-            background: var(--bg-card);
-            border-radius: 12px;
-            font-size: 16px;
-            font-weight: 600;
-            color: var(--text-primary);
-            cursor: pointer;
-        }
-
-        .btn-primary {
-            flex: 2;
-            padding: 14px;
+        /* Schedule Save Button */
+        .schedule-save-btn {
+            width: 100%;
+            padding: 16px 20px;
             border: none;
-            background: var(--blue);
-            border-radius: 12px;
+            background: var(--green);
+            border-radius: 50px;
             font-size: 16px;
             font-weight: 600;
             color: white;
             cursor: pointer;
+            transition: transform 0.2s;
         }
 
-        .btn-primary:active, .btn-secondary:active {
-            opacity: 0.8;
+        .schedule-save-btn:active {
+            transform: scale(0.98);
         }
 
         /* Toast */
@@ -656,55 +729,56 @@
     <!-- Schedule Editor Drawer -->
     <div class="drawer-overlay" id="scheduleDrawerOverlay" onclick="closeScheduleDrawer()"></div>
     <div class="drawer" id="scheduleDrawer">
-        <div class="drawer-header">
-            <div class="drawer-title" id="scheduleDrawerTitle">Create route</div>
-        </div>
         <div class="drawer-content">
-            <div class="form-group" id="formGroupFrom">
-                <label class="form-label">From Station</label>
-                <select id="editFromStation">
-                    <option value="">Select station...</option>
-                </select>
-                <div class="form-error" id="errorFrom"></div>
+            <!-- Route Section -->
+            <div class="form-section">
+                <div class="form-section-title">Route</div>
+                <div class="route-selector" id="formGroupRoute">
+                    <div class="route-indicator">
+                        <div class="route-dot route-dot-start"></div>
+                        <div class="route-line"></div>
+                        <div class="route-dot route-dot-end"></div>
+                    </div>
+                    <div class="route-inputs">
+                        <select id="editFromStation" class="route-select">
+                            <option value="">From</option>
+                        </select>
+                        <div class="route-divider"></div>
+                        <select id="editToStation" class="route-select">
+                            <option value="">To</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="form-error" id="errorRoute"></div>
             </div>
 
-            <div class="form-group" id="formGroupTo">
-                <label class="form-label">To Station</label>
-                <select id="editToStation">
-                    <option value="">Select station...</option>
-                </select>
-                <div class="form-error" id="errorTo"></div>
-            </div>
+            <!-- Schedule Section -->
+            <div class="form-section">
+                <div class="form-section-title">Schedule</div>
 
-            <div class="form-group" id="formGroupDays">
-                <label class="form-label">Days</label>
-                <div class="day-selector">
-                    <button type="button" class="day-btn" data-day="1" onclick="toggleDay(1)">Mon</button>
-                    <button type="button" class="day-btn" data-day="2" onclick="toggleDay(2)">Tue</button>
-                    <button type="button" class="day-btn" data-day="3" onclick="toggleDay(3)">Wed</button>
-                    <button type="button" class="day-btn" data-day="4" onclick="toggleDay(4)">Thu</button>
-                    <button type="button" class="day-btn" data-day="5" onclick="toggleDay(5)">Fri</button>
-                    <button type="button" class="day-btn" data-day="6" onclick="toggleDay(6)">Sat</button>
-                    <button type="button" class="day-btn" data-day="0" onclick="toggleDay(0)">Sun</button>
+                <!-- Days -->
+                <div class="day-selector" id="formGroupDays">
+                    <button type="button" class="day-btn-circle" data-day="1" onclick="toggleDay(1)">M</button>
+                    <button type="button" class="day-btn-circle" data-day="2" onclick="toggleDay(2)">T</button>
+                    <button type="button" class="day-btn-circle" data-day="3" onclick="toggleDay(3)">W</button>
+                    <button type="button" class="day-btn-circle" data-day="4" onclick="toggleDay(4)">T</button>
+                    <button type="button" class="day-btn-circle" data-day="5" onclick="toggleDay(5)">F</button>
+                    <button type="button" class="day-btn-circle" data-day="6" onclick="toggleDay(6)">S</button>
+                    <button type="button" class="day-btn-circle" data-day="0" onclick="toggleDay(0)">S</button>
                 </div>
                 <div class="form-error" id="errorDays"></div>
-            </div>
 
-            <div class="form-group" id="formGroupTime">
-                <label class="form-label">Start Time</label>
-                <input type="time" id="editStartTime" value="07:00">
-            </div>
-
-            <div class="form-group">
-                <label class="form-label">End Time</label>
-                <input type="time" id="editEndTime" value="09:00">
+                <!-- Time Range -->
+                <div class="time-range" id="formGroupTime">
+                    <input type="time" id="editStartTime" class="time-input" value="07:00">
+                    <div class="time-arrow">→</div>
+                    <input type="time" id="editEndTime" class="time-input" value="09:00">
+                </div>
                 <div class="form-error" id="errorTime"></div>
             </div>
 
-            <div class="drawer-actions">
-                <button class="btn-secondary" onclick="closeScheduleDrawer()">Cancel</button>
-                <button class="btn-primary" onclick="saveSchedule()">Save route</button>
-            </div>
+            <!-- Save Button -->
+            <button class="schedule-save-btn" onclick="saveSchedule()">Add route</button>
         </div>
     </div>
 
@@ -962,7 +1036,6 @@
                 // Edit existing schedule
                 editingScheduleIndex = scheduleIndex;
                 var sched = smartSchedules[scheduleIndex];
-                document.getElementById('scheduleDrawerTitle').textContent = 'Edit route';
                 document.getElementById('editFromStation').value = sched.fromId;
                 document.getElementById('editToStation').value = sched.toId;
                 document.getElementById('editStartTime').value = sched.startTime;
@@ -971,7 +1044,6 @@
             } else {
                 // Create new schedule
                 editingScheduleIndex = -1;
-                document.getElementById('scheduleDrawerTitle').textContent = 'Create route';
                 document.getElementById('editFromStation').value = favoriteStations[0] || '';
                 document.getElementById('editToStation').value = favoriteStations[1] || '';
                 document.getElementById('editStartTime').value = '07:00';
@@ -1001,8 +1073,8 @@
             var fromSelect = document.getElementById('editFromStation');
             var toSelect = document.getElementById('editToStation');
 
-            fromSelect.innerHTML = '<option value="">Select station...</option>';
-            toSelect.innerHTML = '<option value="">Select station...</option>';
+            fromSelect.innerHTML = '<option value="">From</option>';
+            toSelect.innerHTML = '<option value="">To</option>';
 
             for (var i = 0; i < favoriteStations.length; i++) {
                 var stationId = favoriteStations[i];
@@ -1035,7 +1107,7 @@
 
         // Update day button visual state
         function updateDayButtons() {
-            var buttons = document.querySelectorAll('.day-btn');
+            var buttons = document.querySelectorAll('.day-btn-circle');
             for (var i = 0; i < buttons.length; i++) {
                 var btn = buttons[i];
                 var day = parseInt(btn.getAttribute('data-day'));
@@ -1058,18 +1130,11 @@
 
             var hasError = false;
 
-            if (!fromId) {
-                showFormError('From', 'Please select a departure station');
+            if (!fromId || !toId) {
+                showFormError('Route', 'Please select both stations');
                 hasError = true;
-            }
-
-            if (!toId) {
-                showFormError('To', 'Please select an arrival station');
-                hasError = true;
-            }
-
-            if (fromId && toId && fromId === toId) {
-                showFormError('To', 'Stations must be different');
+            } else if (fromId === toId) {
+                showFormError('Route', 'Stations must be different');
                 hasError = true;
             }
 
@@ -1117,15 +1182,15 @@
         // Form error helpers
         function showFormError(fieldId, message) {
             var errorEl = document.getElementById('error' + fieldId);
-            var formGroup = document.getElementById('formGroup' + fieldId);
+            var formSection = document.getElementById('formGroup' + fieldId);
 
             if (errorEl) {
                 errorEl.textContent = message;
                 errorEl.classList.add('show');
             }
 
-            if (formGroup) {
-                formGroup.classList.add('error');
+            if (formSection) {
+                formSection.classList.add('error');
             }
         }
 
@@ -1135,9 +1200,9 @@
                 errors[i].classList.remove('show');
             }
 
-            var formGroups = document.querySelectorAll('.form-group');
-            for (var i = 0; i < formGroups.length; i++) {
-                formGroups[i].classList.remove('error');
+            var formSections = document.querySelectorAll('.form-section, .route-selector, .day-selector, .time-range');
+            for (var i = 0; i < formSections.length; i++) {
+                formSections[i].classList.remove('error');
             }
         }
 
