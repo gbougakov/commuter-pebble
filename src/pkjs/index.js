@@ -23,10 +23,15 @@ var MSG_SEND_DETAIL = 5;
 var MSG_SEND_STATION_COUNT = 6;
 var MSG_SEND_STATION = 7;
 var MSG_SET_ACTIVE_ROUTE = 8;
+var MSG_REQUEST_ACK = 9;
 
 // Debounce timer for API requests
 var requestDebounceTimer = null;
 var DEBOUNCE_DELAY = 500; // milliseconds
+
+// Request ID tracking (for race condition prevention)
+var currentRequestId = 0;  // Last received request ID
+var currentDetailRequestId = 0;  // Last received detail request ID
 
 // Store current route and connection identifiers for detail requests
 // These are persisted to localStorage for continuity across app restarts
@@ -125,6 +130,7 @@ function fetchTrainDataById(fromId, toId) {
     // Make HTTP request
     var xhr = new XMLHttpRequest();
     xhr.open('GET', url, true);
+    xhr.setRequestHeader('User-Agent', 'WerknaamCommuter <https://werknaam.be, commuter@werknaam.be>');
     xhr.onload = function () {
         if (xhr.readyState === 4) {
             if (xhr.status === 200) {
@@ -165,7 +171,8 @@ function processTrainData(response) {
         // Send count of 0
         Pebble.sendAppMessage({
             'MESSAGE_TYPE': MSG_SEND_COUNT,
-            'DATA_COUNT': 0
+            'DATA_COUNT': 0,
+            'REQUEST_ID': currentRequestId
         });
         return;
     }
@@ -176,12 +183,13 @@ function processTrainData(response) {
     console.log('Found ' + count + ' connections');
     console.log('First connection: ' + JSON.stringify(connections[0]));
 
-    // Send count first
+    // Send count first (with request ID)
     Pebble.sendAppMessage({
         'MESSAGE_TYPE': MSG_SEND_COUNT,
-        'DATA_COUNT': count
+        'DATA_COUNT': count,
+        'REQUEST_ID': currentRequestId
     }, function () {
-        console.log('Count sent: ' + count);
+        console.log('Count sent: ' + count + ' [ID ' + currentRequestId + ']');
         // Start sending departures
         sendDeparture(connections, 0);
     }, function (e) {
@@ -255,7 +263,7 @@ function sendDeparture(connections, index) {
     savePersistedData();
     console.log('yo');
 
-    // Build message (DESTINATION field now contains direction/terminus)
+    // Build message (DESTINATION field now contains direction/terminus, with REQUEST_ID)
     var message = {
         'MESSAGE_TYPE': MSG_SEND_DEPARTURE,
         'DEPARTURE_INDEX': index,
@@ -268,10 +276,11 @@ function sendDeparture(connections, index) {
         'DEPART_DELAY': Math.floor(departDelay / 60),
         'ARRIVE_DELAY': Math.floor(arriveDelay / 60),
         'IS_DIRECT': isDirect,
-        'PLATFORM_CHANGED': platformChanged
+        'PLATFORM_CHANGED': platformChanged,
+        'REQUEST_ID': currentRequestId
     };
 
-    console.log('Sending departure ' + index + ': ' + direction);
+    console.log('Sending departure ' + index + ': ' + direction + ' [ID ' + currentRequestId + ']');
 
     // Send message with callbacks
     Pebble.sendAppMessage(message, function () {
@@ -354,6 +363,7 @@ function fetchConnectionDetails(departureIndex) {
 
     var xhr = new XMLHttpRequest();
     xhr.open('GET', url, true);
+    xhr.setRequestHeader('User-Agent', 'WerknaamCommuter <https://werknaam.be, commuter@werknaam.be>');
     xhr.onload = function () {
         if (xhr.readyState === 4 && xhr.status === 200) {
             try {
@@ -398,6 +408,7 @@ function fetchStations() {
     console.log('Fetching stations from iRail API...');
     var xhr = new XMLHttpRequest();
     xhr.open('GET', IRAIL_STATIONS_URL, true);
+    xhr.setRequestHeader('User-Agent', 'WerknaamCommuter <https://werknaam.be, commuter@werknaam.be>');
     xhr.onload = function() {
         if (xhr.readyState === 4 && xhr.status === 200) {
             try {
@@ -557,13 +568,14 @@ function sendConnectionDetail(conn, departureIndex) {
 
     console.log('Built ' + legs.length + ' legs');
 
-    // Send leg count first
+    // Send leg count first (with request ID)
     Pebble.sendAppMessage({
         'MESSAGE_TYPE': MSG_SEND_DETAIL,
         'DEPARTURE_INDEX': departureIndex,
-        'LEG_COUNT': legs.length
+        'LEG_COUNT': legs.length,
+        'REQUEST_ID': currentDetailRequestId
     }, function () {
-        console.log('Leg count sent: ' + legs.length);
+        console.log('Leg count sent: ' + legs.length + ' [ID ' + currentDetailRequestId + ']');
         // Start sending individual legs
         sendLeg(legs, 0);
     }, function (e) {
@@ -595,10 +607,11 @@ function sendLeg(legs, index) {
         'LEG_DIRECTION': leg.direction.substring(0, 31),
         'LEG_STOP_COUNT': leg.stopCount,
         'LEG_DEPART_PLATFORM_CHANGED': leg.departPlatformChanged,
-        'LEG_ARRIVE_PLATFORM_CHANGED': leg.arrivePlatformChanged
+        'LEG_ARRIVE_PLATFORM_CHANGED': leg.arrivePlatformChanged,
+        'REQUEST_ID': currentDetailRequestId
     };
 
-    console.log('Sending leg ' + index + ': ' + leg.departStation + ' → ' + leg.arriveStation);
+    console.log('Sending leg ' + index + ': ' + leg.departStation + ' → ' + leg.arriveStation + ' [ID ' + currentDetailRequestId + ']');
 
     Pebble.sendAppMessage(message, function () {
         // Success - send next leg
@@ -617,6 +630,10 @@ Pebble.addEventListener('appmessage', function (e) {
     var messageType = e.payload.MESSAGE_TYPE;
 
     if (messageType === MSG_REQUEST_DATA) {
+        // Extract request ID (for race condition prevention)
+        currentRequestId = e.payload.REQUEST_ID || 0;
+        console.log('Train data request [ID ' + currentRequestId + ']');
+
         // Check if using new iRail ID format or old name format
         var fromId = e.payload.FROM_STATION_ID;
         var toId = e.payload.TO_STATION_ID;
@@ -642,15 +659,27 @@ Pebble.addEventListener('appmessage', function (e) {
             console.log('Debouncing request...');
         }
 
+        // Send acknowledgment immediately (before debounce)
+        Pebble.sendAppMessage({
+            'MESSAGE_TYPE': MSG_REQUEST_ACK,
+            'REQUEST_ID': currentRequestId
+        }, function() {
+            console.log('Request acknowledged [ID ' + currentRequestId + ']');
+        }, function(e) {
+            console.log('Failed to send acknowledgment: ' + e.error.message);
+        });
+
         // Debounce the API request
         requestDebounceTimer = setTimeout(function () {
-            console.log('Executing debounced request');
+            console.log('Executing debounced request [ID ' + currentRequestId + ']');
             fetchTrainDataById(fromId, toId);
             requestDebounceTimer = null;
         }, DEBOUNCE_DELAY);
     } else if (messageType === MSG_REQUEST_DETAILS) {
+        // Extract request ID for detail request
+        currentDetailRequestId = e.payload.REQUEST_ID || 0;
         var departureIndex = e.payload.DEPARTURE_INDEX;
-        console.log('Details requested for departure ' + departureIndex);
+        console.log('Details requested [ID ' + currentDetailRequestId + '] for departure ' + departureIndex);
         fetchConnectionDetails(departureIndex);
     }
 });

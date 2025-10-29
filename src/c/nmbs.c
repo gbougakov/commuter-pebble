@@ -127,12 +127,23 @@ static void abbreviate_station_name(const char *input, char *output, size_t outp
 #define MSG_SEND_STATION_COUNT 6
 #define MSG_SEND_STATION 7
 #define MSG_SET_ACTIVE_ROUTE 8
+#define MSG_REQUEST_ACK 9
 
 // Worker message type for glance updates
 #define WORKER_REQUEST_GLANCE 100
 
 // Maximum number of departures we can store
 #define MAX_DEPARTURES 11
+
+// Loading state machine for detailed user feedback
+typedef enum {
+  LOAD_STATE_IDLE,           // Not loading
+  LOAD_STATE_CONNECTING,     // Waiting for JS to acknowledge request
+  LOAD_STATE_FETCHING,       // JS is calling iRail API
+  LOAD_STATE_RECEIVING,      // Receiving departure data
+  LOAD_STATE_COMPLETE,       // All data received
+  LOAD_STATE_ERROR          // Error occurred
+} LoadState;
 
 // Train schedule data structure
 typedef struct {
@@ -151,9 +162,19 @@ typedef struct {
 // Dynamic train data (populated from API)
 static TrainDeparture s_departures[MAX_DEPARTURES];
 static uint8_t s_num_departures = 0;
-static bool s_data_loading = false;
+static bool s_data_loading = false;  // Legacy flag (kept for compatibility)
 static bool s_data_failed = false;
 static bool s_is_background_update = false;
+
+// Loading state management
+static LoadState s_load_state = LOAD_STATE_IDLE;
+static AppTimer *s_timeout_timer = NULL;
+#define LOADING_TIMEOUT_MS 10000  // 10 seconds
+
+// Request ID tracking (prevents race conditions)
+static uint32_t s_current_request_id = 0;
+static uint32_t s_last_data_request_id = 0;
+static uint32_t s_last_detail_request_id = 0;
 
 // Marquee timer callback
 static void marquee_timer_callback(void *data) {
@@ -278,15 +299,35 @@ static void menu_draw_row_callback(GContext *ctx,
 
   // Section 1: Train departures
 
-  // Show loading indicator if data is being fetched
+  // Show loading indicator based on state machine
   if (s_data_loading) {
     bool selected = menu_cell_layer_is_highlighted(cell_layer);
     GColor text_color = selected ? GColorWhite : GColorBlack;
     graphics_context_set_text_color(ctx, text_color);
+
+    const char *loading_message;
+    switch (s_load_state) {
+      case LOAD_STATE_CONNECTING:
+        loading_message = "Connecting to phone...";
+        break;
+      case LOAD_STATE_FETCHING:
+        loading_message = "Loading trains...";
+        break;
+      case LOAD_STATE_RECEIVING:
+        loading_message = "Receiving trains...";
+        break;
+      case LOAD_STATE_ERROR:
+        loading_message = "Connection failed";
+        break;
+      default:
+        loading_message = "Loading...";
+        break;
+    }
+
     graphics_draw_text(ctx,
-                       "Loading trains...",
-                       fonts_get_system_font(FONT_KEY_GOTHIC_18_BOLD),
-                       GRect(4, 10, bounds.size.w - 8, 24),
+                       loading_message,
+                       fonts_get_system_font(FONT_KEY_GOTHIC_14_BOLD),
+                       GRect(4, 12, bounds.size.w - 8, 24),
                        GTextOverflowModeTrailingEllipsis,
                        GTextAlignmentCenter,
                        NULL);
@@ -624,13 +665,21 @@ static void menu_select_callback(MenuLayer *menu_layer,
   TrainDeparture *departure = &s_departures[s_selected_departure_index];
   APP_LOG(APP_LOG_LEVEL_INFO, "Selected train to %s", departure->destination);
 
+  // Generate unique request ID for detail request
+  s_current_request_id++;
+  s_last_detail_request_id = s_current_request_id;
+
   // Request fresh details from JavaScript
   s_detail_received = false;
   DictionaryIterator *iter;
   app_message_outbox_begin(&iter);
   dict_write_uint8(iter, MESSAGE_KEY_MESSAGE_TYPE, MSG_REQUEST_DETAILS);
   dict_write_uint8(iter, MESSAGE_KEY_DEPARTURE_INDEX, s_selected_departure_index);
+  dict_write_uint32(iter, MESSAGE_KEY_REQUEST_ID, s_last_detail_request_id);
   app_message_outbox_send();
+
+  APP_LOG(APP_LOG_LEVEL_INFO, "Detail request [ID %lu] sent for departure %d",
+          (unsigned long)s_last_detail_request_id, s_selected_departure_index);
 
   // Create detail window if not already created
   if (!s_detail_window) {
@@ -1033,6 +1082,19 @@ static void update_app_glance(AppGlanceReloadSession *session, size_t limit, voi
 }
 #endif  // PBL_HEALTH
 
+// Timeout watchdog callback
+static void loading_timeout_callback(void *data) {
+  s_timeout_timer = NULL;
+
+  if (s_load_state == LOAD_STATE_CONNECTING || s_load_state == LOAD_STATE_FETCHING) {
+    APP_LOG(APP_LOG_LEVEL_WARNING, "Loading timeout - transitioning to ERROR state");
+    s_load_state = LOAD_STATE_ERROR;
+    s_data_loading = false;
+    s_data_failed = true;
+    menu_layer_reload_data(s_menu_layer);
+  }
+}
+
 // Worker message handler
 static void worker_message_handler(uint16_t type, AppWorkerMessage *data) {
   if (type == WORKER_REQUEST_GLANCE) {
@@ -1049,21 +1111,36 @@ static void request_train_data(void) {
     return;
   }
 
+  // Generate unique request ID
+  s_current_request_id++;
+  s_last_data_request_id = s_current_request_id;
+
   DictionaryIterator *iter;
   app_message_outbox_begin(&iter);
 
   dict_write_uint8(iter, MESSAGE_KEY_MESSAGE_TYPE, MSG_REQUEST_DATA);
   dict_write_cstring(iter, MESSAGE_KEY_FROM_STATION_ID, s_stations[s_from_station_index].irail_id);
   dict_write_cstring(iter, MESSAGE_KEY_TO_STATION_ID, s_stations[s_to_station_index].irail_id);
+  dict_write_uint32(iter, MESSAGE_KEY_REQUEST_ID, s_last_data_request_id);
 
   app_message_outbox_send();
 
+  // Update state machine
+  s_load_state = LOAD_STATE_CONNECTING;
   s_data_loading = true;
-  s_data_failed = false;  // Clear error flag on new request
+  s_data_failed = false;
   s_num_departures = 0;
+
+  // Start timeout watchdog
+  if (s_timeout_timer) {
+    app_timer_cancel(s_timeout_timer);
+  }
+  s_timeout_timer = app_timer_register(LOADING_TIMEOUT_MS, loading_timeout_callback, NULL);
+
   menu_layer_reload_data(s_menu_layer);
 
-  APP_LOG(APP_LOG_LEVEL_INFO, "Requesting data: %s -> %s",
+  APP_LOG(APP_LOG_LEVEL_INFO, "Requesting data [ID %lu]: %s -> %s",
+          (unsigned long)s_last_data_request_id,
           s_stations[s_from_station_index].name,
           s_stations[s_to_station_index].name);
 }
@@ -1079,22 +1156,68 @@ static void inbox_received_callback(DictionaryIterator *iterator, void *context)
 
   uint8_t message_type = message_type_tuple->value->uint8;
 
-  if (message_type == MSG_SEND_COUNT) {
+  if (message_type == MSG_REQUEST_ACK) {
+    // JavaScript acknowledged the request and is fetching from API
+    Tuple *request_id_tuple = dict_find(iterator, MESSAGE_KEY_REQUEST_ID);
+    if (request_id_tuple) {
+      uint32_t request_id = request_id_tuple->value->uint32;
+
+      // Validate this acknowledgment is for our current request
+      if (request_id == s_last_data_request_id) {
+        APP_LOG(APP_LOG_LEVEL_INFO, "Request acknowledged [ID %lu], fetching from iRail...",
+                (unsigned long)request_id);
+        s_load_state = LOAD_STATE_FETCHING;
+        menu_layer_reload_data(s_menu_layer);
+      } else {
+        APP_LOG(APP_LOG_LEVEL_WARNING, "Ignoring stale acknowledgment [ID %lu] (expected %lu)",
+                (unsigned long)request_id, (unsigned long)s_last_data_request_id);
+      }
+    }
+  } else if (message_type == MSG_SEND_COUNT) {
     // Received departure count
+    Tuple *request_id_tuple = dict_find(iterator, MESSAGE_KEY_REQUEST_ID);
     Tuple *count_tuple = dict_find(iterator, MESSAGE_KEY_DATA_COUNT);
-    if (count_tuple) {
+
+    if (request_id_tuple && count_tuple) {
+      uint32_t request_id = request_id_tuple->value->uint32;
+
+      // Validate this response is for our current request
+      if (request_id != s_last_data_request_id) {
+        APP_LOG(APP_LOG_LEVEL_WARNING, "Ignoring stale count [ID %lu] (expected %lu)",
+                (unsigned long)request_id, (unsigned long)s_last_data_request_id);
+        return;
+      }
+
       s_num_departures = count_tuple->value->uint8;
-      APP_LOG(APP_LOG_LEVEL_INFO, "Expecting %d departures", s_num_departures);
+      s_load_state = LOAD_STATE_RECEIVING;
+      APP_LOG(APP_LOG_LEVEL_INFO, "Expecting %d departures [ID %lu]",
+              s_num_departures, (unsigned long)request_id);
 
       if (s_num_departures == 0) {
+        s_load_state = LOAD_STATE_COMPLETE;
         s_data_loading = false;
+        if (s_timeout_timer) {
+          app_timer_cancel(s_timeout_timer);
+          s_timeout_timer = NULL;
+        }
         menu_layer_reload_data(s_menu_layer);
       }
     }
   } else if (message_type == MSG_SEND_DEPARTURE) {
     // Received departure data
+    Tuple *request_id_tuple = dict_find(iterator, MESSAGE_KEY_REQUEST_ID);
     Tuple *index_tuple = dict_find(iterator, MESSAGE_KEY_DEPARTURE_INDEX);
     if (!index_tuple) return;
+
+    // Validate request ID if present
+    if (request_id_tuple) {
+      uint32_t request_id = request_id_tuple->value->uint32;
+      if (request_id != s_last_data_request_id) {
+        APP_LOG(APP_LOG_LEVEL_WARNING, "Ignoring stale departure [ID %lu] (expected %lu)",
+                (unsigned long)request_id, (unsigned long)s_last_data_request_id);
+        return;
+      }
+    }
 
     uint8_t index = index_tuple->value->uint8;
     if (index >= MAX_DEPARTURES) return;
@@ -1131,7 +1254,15 @@ static void inbox_received_callback(DictionaryIterator *iterator, void *context)
 
     // If this is the last departure, stop loading
     if (index == s_num_departures - 1) {
+      s_load_state = LOAD_STATE_COMPLETE;
       s_data_loading = false;
+
+      // Cancel timeout timer
+      if (s_timeout_timer) {
+        app_timer_cancel(s_timeout_timer);
+        s_timeout_timer = NULL;
+      }
+
       APP_LOG(APP_LOG_LEVEL_INFO, "All departures received");
 
       // Update glances with fresh data (only on platforms with AppGlance support)
@@ -1153,13 +1284,25 @@ static void inbox_received_callback(DictionaryIterator *iterator, void *context)
     }
   } else if (message_type == MSG_SEND_DETAIL) {
     // Received connection detail data (leg-by-leg)
+    Tuple *request_id_tuple = dict_find(iterator, MESSAGE_KEY_REQUEST_ID);
     Tuple *leg_count_tuple = dict_find(iterator, MESSAGE_KEY_LEG_COUNT);
     Tuple *leg_index_tuple = dict_find(iterator, MESSAGE_KEY_LEG_INDEX);
+
+    // Validate request ID if present
+    if (request_id_tuple) {
+      uint32_t request_id = request_id_tuple->value->uint32;
+      if (request_id != s_last_detail_request_id) {
+        APP_LOG(APP_LOG_LEVEL_WARNING, "Ignoring stale detail [ID %lu] (expected %lu)",
+                (unsigned long)request_id, (unsigned long)s_last_detail_request_id);
+        return;
+      }
+    }
 
     if (leg_count_tuple) {
       // First message: leg count
       s_journey_detail.leg_count = leg_count_tuple->value->uint8;
-      APP_LOG(APP_LOG_LEVEL_INFO, "Expecting %d legs", s_journey_detail.leg_count);
+      APP_LOG(APP_LOG_LEVEL_INFO, "Expecting %d legs [ID %lu]", s_journey_detail.leg_count,
+              request_id_tuple ? (unsigned long)request_id_tuple->value->uint32 : 0);
     } else if (leg_index_tuple) {
       // Subsequent messages: individual leg data
       uint8_t leg_index = leg_index_tuple->value->uint8;
