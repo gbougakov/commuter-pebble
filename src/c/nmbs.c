@@ -922,8 +922,8 @@ static void detail_window_load(Window *window) {
   // Add ScrollLayer to window
   layer_add_child(window_layer, scroll_layer_get_layer(s_detail_scroll_layer));
 
-  // Set initial content
-  update_detail_window();
+  // Set initial content - mark dirty AFTER adding to hierarchy to ensure first draw
+  layer_mark_dirty(s_detail_content_layer);
 }
 
 static void detail_window_unload(Window *window) {
