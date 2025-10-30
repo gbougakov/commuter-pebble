@@ -29,6 +29,7 @@
       "DEPARTURE_INDEX",
       "DESTINATION",
       "DEPART_TIME",
+      "DEPART_TIMESTAMP",
       "ARRIVE_TIME",
       "PLATFORM",
       "TRAIN_TYPE",

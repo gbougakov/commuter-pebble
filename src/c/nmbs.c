@@ -149,6 +149,7 @@ typedef enum {
 typedef struct {
   char destination[32];
   char depart_time[8];
+  time_t depart_timestamp;  // Unix timestamp for glance expiration (avoids parsing)
   char arrive_time[8];
   char platform[4];
   char train_type[8];
@@ -172,7 +173,6 @@ static AppTimer *s_timeout_timer = NULL;
 #define LOADING_TIMEOUT_MS 10000  // 10 seconds
 
 // Request ID tracking (prevents race conditions)
-static uint32_t s_current_request_id = 0;
 static uint32_t s_last_data_request_id = 0;
 static uint32_t s_last_detail_request_id = 0;
 
@@ -666,8 +666,7 @@ static void menu_select_callback(MenuLayer *menu_layer,
   APP_LOG(APP_LOG_LEVEL_INFO, "Selected train to %s", departure->destination);
 
   // Generate unique request ID for detail request
-  s_current_request_id++;
-  s_last_detail_request_id = s_current_request_id;
+  s_last_detail_request_id++;
 
   // Request fresh details from JavaScript
   s_detail_received = false;
@@ -983,57 +982,6 @@ static void window_unload(Window *window) {
   status_bar_layer_destroy(s_status_bar);
 }
 
-// AppGlances helper functions (only on platforms with AppGlance support)
-#if defined(PBL_HEALTH)
-
-// Helper function: Convert "HH:MM" time string to Unix timestamp
-static time_t parse_departure_time(const char *time_str) {
-  // Parse HH:MM manually (avoid sscanf for platform compatibility)
-  int hours = 0, minutes = 0;
-  const char *p = time_str;
-
-  // Parse hours
-  while (*p && *p != ':') {
-    if (*p >= '0' && *p <= '9') {
-      hours = hours * 10 + (*p - '0');
-    }
-    p++;
-  }
-
-  // Parse minutes
-  if (*p == ':') p++;
-  while (*p) {
-    if (*p >= '0' && *p <= '9') {
-      minutes = minutes * 10 + (*p - '0');
-    }
-    p++;
-  }
-
-  // Get current time
-  time_t now = time(NULL);
-
-  // Convert to struct tm to manipulate
-  struct tm departure_tm = *gmtime(&now);
-
-  // Set to today at the departure time
-  departure_tm.tm_hour = hours;
-  departure_tm.tm_min = minutes;
-  departure_tm.tm_sec = 0;
-
-  // Convert back to time_t
-  time_t departure_time = mktime(&departure_tm);
-
-  // If departure time is in the past (already departed today), assume it's tomorrow
-  // This handles overnight trains or late-night updates
-  if (departure_time < now) {
-    departure_time += 24 * 60 * 60;  // Add 24 hours
-  }
-
-  return departure_time;
-}
-
-#endif  // PBL_HEALTH
-
 // AppGlance update callback (only on platforms with AppGlance support)
 #if defined(PBL_HEALTH)
 static void update_app_glance(AppGlanceReloadSession *session, size_t limit, void *context) {
@@ -1069,7 +1017,7 @@ static void update_app_glance(AppGlanceReloadSession *session, size_t limit, voi
       .layout = {
         .subtitle_template_string = subtitle
       },
-      .expiration_time = parse_departure_time(dep->depart_time)
+      .expiration_time = dep->depart_timestamp
     };
 
     AppGlanceResult result = app_glance_add_slice(session, slice);
@@ -1112,8 +1060,7 @@ static void request_train_data(void) {
   }
 
   // Generate unique request ID
-  s_current_request_id++;
-  s_last_data_request_id = s_current_request_id;
+  s_last_data_request_id++;
 
   DictionaryIterator *iter;
   app_message_outbox_begin(&iter);
@@ -1227,6 +1174,7 @@ static void inbox_received_callback(DictionaryIterator *iterator, void *context)
     // Read all fields
     Tuple *dest = dict_find(iterator, MESSAGE_KEY_DESTINATION);
     Tuple *depart = dict_find(iterator, MESSAGE_KEY_DEPART_TIME);
+    Tuple *depart_ts = dict_find(iterator, MESSAGE_KEY_DEPART_TIMESTAMP);
     Tuple *arrive = dict_find(iterator, MESSAGE_KEY_ARRIVE_TIME);
     Tuple *platform = dict_find(iterator, MESSAGE_KEY_PLATFORM);
     Tuple *train_type = dict_find(iterator, MESSAGE_KEY_TRAIN_TYPE);
@@ -1250,9 +1198,12 @@ static void inbox_received_callback(DictionaryIterator *iterator, void *context)
     dep->is_direct = is_direct ? (is_direct->value->uint8 != 0) : true;
     dep->platform_changed = platform_changed ? (platform_changed->value->uint8 != 0) : false;
 
+    // Store timestamp for glance expiration (avoids parsing later)
+    dep->depart_timestamp = depart_ts ? (time_t)depart_ts->value->int32 : 0;
+
     APP_LOG(APP_LOG_LEVEL_INFO, "Received departure %d: %s", index, dep->destination);
 
-    // If this is the last departure, stop loading
+    // If this is the last departure, complete loading
     if (index == s_num_departures - 1) {
       s_load_state = LOAD_STATE_COMPLETE;
       s_data_loading = false;
@@ -1276,11 +1227,14 @@ static void inbox_received_callback(DictionaryIterator *iterator, void *context)
         s_is_background_update = false;
         // App will exit naturally when window stack is empty
       } else {
-        // Normal update - refresh UI
+        // Normal update - refresh UI (only after all departures received)
         menu_layer_reload_data(s_menu_layer);
       }
-    } else{
-      layer_mark_dirty(menu_layer_get_layer(s_menu_layer));
+    } else {
+      // Intermediate departure - just mark dirty to redraw without resetting scroll
+      if (!s_is_background_update) {
+        layer_mark_dirty(menu_layer_get_layer(s_menu_layer));
+      }
     }
   } else if (message_type == MSG_SEND_DETAIL) {
     // Received connection detail data (leg-by-leg)

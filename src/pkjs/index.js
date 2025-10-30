@@ -158,6 +158,11 @@ function fetchTrainDataById(fromId, toId) {
     };
     xhr.onerror = function () {
         console.log('Network error');
+        // Send empty count to notify watch of failure
+        Pebble.sendAppMessage({
+            'MESSAGE_TYPE': MSG_SEND_COUNT,
+            'DATA_COUNT': 0
+        });
     };
     xhr.send();
 }
@@ -259,9 +264,7 @@ function sendDeparture(connections, index) {
     };
 
     // Persist connection identifiers (will save after each departure)
-    console.log('oy');
     savePersistedData();
-    console.log('yo');
 
     // Build message (DESTINATION field now contains direction/terminus, with REQUEST_ID)
     var message = {
@@ -269,6 +272,7 @@ function sendDeparture(connections, index) {
         'DEPARTURE_INDEX': index,
         'DESTINATION': direction.substring(0, 31), // Limit to 31 chars
         'DEPART_TIME': formatUnixTime(departTime),
+        'DEPART_TIMESTAMP': departTime, // Unix timestamp for glance expiration
         'ARRIVE_TIME': formatUnixTime(arriveTime),
         'PLATFORM': platform.substring(0, 3), // Limit to 3 chars
         'TRAIN_TYPE': trainType.substring(0, 7), // Limit to 7 chars
@@ -351,6 +355,8 @@ function fetchConnectionDetails(departureIndex) {
         return;
     }
 
+    // Fetch connections starting 10 minutes before selected train
+    // This ensures we get the exact train plus any earlier alternatives
     var url = IRAIL_API_URL +
         '?from=' + encodeURIComponent(fromId) +
         '&to=' + encodeURIComponent(toId) +
@@ -418,8 +424,7 @@ function fetchStations() {
                     stationCache = response.station.map(function(s) {
                         return {
                             id: s.id,                          // "BE.NMBS.008813003"
-                            name: s.name,                      // "Brussels-Central"
-                            standardName: s.standardname       // "Brussel-Centraal"
+                            name: s.name                       // "Brussels-Central"
                         };
                     });
 
@@ -643,19 +648,21 @@ Pebble.addEventListener('appmessage', function (e) {
             currentFromStation = fromId;
             currentToStation = toId;
         } else {
-            // Fallback to old format (station names)
+            // Fallback to old format (station names) - convert to IDs
             var fromStation = e.payload.FROM_STATION;
             var toStation = e.payload.TO_STATION;
             console.log('Data requested (by name): ' + fromStation + ' -> ' + toStation);
             fromId = STATION_IDS[fromStation];
             toId = STATION_IDS[toStation];
-            currentFromStation = fromStation;
-            currentToStation = toStation;
+            // Always store IDs, not names
+            currentFromStation = fromId;
+            currentToStation = toId;
         }
 
         // Clear any pending request
         if (requestDebounceTimer) {
             clearTimeout(requestDebounceTimer);
+            requestDebounceTimer = null;  // Clear immediately to avoid stale reference
             console.log('Debouncing request...');
         }
 
@@ -749,13 +756,7 @@ function evaluateSchedules() {
             }
 
             // Check if current day matches
-            var dayMatches = false;
-            for (var j = 0; j < schedule.days.length; j++) {
-                if (schedule.days[j] === currentDay) {
-                    dayMatches = true;
-                    break;
-                }
-            }
+            var dayMatches = schedule.days.indexOf(currentDay) !== -1;
 
             if (!dayMatches) {
                 continue;

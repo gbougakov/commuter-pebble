@@ -838,8 +838,7 @@
                             stationCache = response.station.map(function(s) {
                                 return {
                                     id: s.id,
-                                    name: s.name,
-                                    standardName: s.standardname
+                                    name: s.name
                                 };
                             });
                             localStorage.setItem('nmbs_station_cache', JSON.stringify(stationCache));
@@ -886,7 +885,7 @@
                 html += '<div class="station-name' + (isPlaceholder ? ' placeholder' : '') + '">' + stationName + '</div>';
 
                 if (!isPlaceholder) {
-                    html += '<div class="station-remove" onclick="removeStation(' + i + '); event.stopPropagation();">✗</div>';
+                    html += '<div class="station-remove" onclick="(function(e) { removeStation(' + i + '); e.stopPropagation(); })(event);">✗</div>';
                 }
 
                 html += '</div>';
@@ -926,7 +925,7 @@
 
             for (var i = 0; i < stationCache.length; i++) {
                 var station = stationCache[i];
-                var searchText = (station.name + ' ' + station.standardName).toLowerCase();
+                var searchText = station.name.toLowerCase();
 
                 if (searchTerm && searchText.indexOf(searchTerm) === -1) {
                     continue;
@@ -1003,7 +1002,7 @@
                 html += '<div class="schedule-meta">' + daysText + ' · ' + timeText + '</div>';
                 html += '<div class="schedule-route">' + fromName + ' → ' + toName + '</div>';
                 html += '</div>';
-                html += '<div class="schedule-remove" onclick="removeSchedule(' + i + '); event.stopPropagation();">✗</div>';
+                html += '<div class="schedule-remove" onclick="(function(e) { removeSchedule(' + i + '); e.stopPropagation(); })(event);">✗</div>';
                 html += '</div>';
             }
 

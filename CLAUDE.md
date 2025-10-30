@@ -405,8 +405,9 @@ typedef struct {
 **After**:
 ```c
 typedef struct {
-  char destination[32];  // Fixed-size array
-  char depart_time[8];
+  char destination[32];      // Fixed-size array
+  char depart_time[8];       // "HH:MM" for display
+  time_t depart_timestamp;   // Unix timestamp for glance expiration
   char arrive_time[8];
   char platform[4];
   char train_type[8];
@@ -673,8 +674,7 @@ function fetchStations() {
         stationCache = response.station.map(function(s) {
             return {
                 id: s.id,                    // "BE.NMBS.008813003"
-                name: s.name,                // "Brussels-Central"
-                standardName: s.standardname // "Brussel-Centraal"
+                name: s.name                 // "Brussels-Central"
             };
         });
         localStorage.setItem('nmbs_station_cache', JSON.stringify(stationCache));
@@ -1009,19 +1009,10 @@ static void worker_message_handler(uint16_t type, AppWorkerMessage *data) {
 **Glance Update Callback:**
 ```c
 static void update_app_glance(AppGlanceReloadSession *session, size_t limit, void *context) {
-  // Main slice: "Next: HH:MM" with train icon, expires at first train's departure
-  // Up to 8 train slices: "14:23 • IC • Plat 3 (+2)" with type-specific icons
-  // Each slice expires at its departure time via parse_departure_time()
+  // Up to 8 train slices: "14:23 • Plat. 3 • Brussels-Central"
+  // Each slice expires using stored depart_timestamp (Unix time from JS)
+  // Timestamps are sent from JavaScript to avoid redundant parsing
 }
-```
-
-**Helper Functions:**
-```c
-// Convert "HH:MM" to Unix timestamp for today (or tomorrow if already passed)
-static time_t parse_departure_time(const char *time_str);
-
-// Map train type string to timeline icon ID
-static uint32_t get_train_type_icon(const char *train_type);
 ```
 
 **Data Reception:**
