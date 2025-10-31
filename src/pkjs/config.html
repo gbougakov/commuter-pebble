@@ -285,6 +285,60 @@
             display: inline-block;
         }
 
+        /* Language Selector */
+        .language-selector {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .language-option {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            cursor: pointer;
+            padding: 8px 0;
+            transition: opacity 0.2s;
+        }
+
+        .language-option:active {
+            opacity: 0.7;
+        }
+
+        .language-radio {
+            width: 20px;
+            height: 20px;
+            border: 2px solid var(--border);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+
+        .language-radio.selected {
+            border-color: var(--blue);
+        }
+
+        .language-radio-inner {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: var(--blue);
+            display: none;
+        }
+
+        .language-radio.selected .language-radio-inner {
+            display: block;
+        }
+
+        .language-label {
+            font-size: 16px;
+            font-weight: 500;
+            color: var(--text-primary);
+            line-height: 1.2;
+        }
+
         /* Save Button (Fixed) */
         .save-button-container {
             position: fixed;
@@ -700,6 +754,18 @@
             <button class="create-route-btn" onclick="openScheduleDrawer()">Create a route +</button>
         </div>
 
+        <!-- Language Settings Card -->
+        <div class="card">
+            <div class="card-section">
+                <div class="card-title">Language</div>
+                <div class="card-description">Choose the language for station names. This affects how station names are displayed on your watch.</div>
+            </div>
+            <div class="card-divider"></div>
+            <div class="language-selector" id="languageSelector">
+                <!-- Language options will be rendered here -->
+            </div>
+        </div>
+
         <!-- About Card -->
         <div class="card">
             <div class="card-section">
@@ -788,6 +854,7 @@
         var favoriteStations = [];
         var smartSchedules = [];
         var maxStations = 6;
+        var selectedLanguage = 'en';
 
         // UI state
         var editingScheduleIndex = -1;
@@ -797,10 +864,19 @@
         // Day names
         var dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
+        // Supported languages
+        var languages = [
+            { code: 'en', name: 'English' },
+            { code: 'nl', name: 'Nederlands' },
+            { code: 'fr', name: 'Français' },
+            { code: 'de', name: 'Deutsch' }
+        ];
+
         // Initialize
         window.onload = function() {
             loadStations();
             loadConfig();
+            renderLanguageSelector();
         };
 
         // Toast notification
@@ -829,7 +905,8 @@
             }
 
             var xhr = new XMLHttpRequest();
-            xhr.open('GET', 'https://api.irail.be/v1/stations?format=json', true);
+            var url = 'https://api.irail.be/v1/stations?format=json&lang=' + selectedLanguage;
+            xhr.open('GET', url, true);
             xhr.onload = function() {
                 if (xhr.readyState === 4 && xhr.status === 200) {
                     try {
@@ -863,6 +940,11 @@
                 var schedJson = localStorage.getItem('nmbs_smart_schedules');
                 if (schedJson) {
                     smartSchedules = JSON.parse(schedJson);
+                }
+
+                var langCode = localStorage.getItem('nmbs_language');
+                if (langCode) {
+                    selectedLanguage = langCode;
                 }
 
                 renderStationSlots();
@@ -1216,6 +1298,50 @@
                 }
             }
             return defaultValue || false;
+        }
+
+        // Render language selector
+        function renderLanguageSelector() {
+            var container = document.getElementById('languageSelector');
+            var html = '';
+
+            for (var i = 0; i < languages.length; i++) {
+                var lang = languages[i];
+                var isSelected = lang.code === selectedLanguage;
+
+                html += '<div class="language-option" onclick="selectLanguage(\'' + lang.code + '\')">';
+                html += '  <div class="language-radio' + (isSelected ? ' selected' : '') + '">';
+                html += '    <div class="language-radio-inner"></div>';
+                html += '  </div>';
+                html += '  <div class="language-label">' + lang.name + '</div>';
+                html += '</div>';
+            }
+
+            container.innerHTML = html;
+        }
+
+        // Select a language
+        function selectLanguage(code) {
+            selectedLanguage = code;
+            localStorage.setItem('nmbs_language', code);
+            renderLanguageSelector();
+
+            // Clear station cache to force refresh with new language
+            localStorage.removeItem('nmbs_station_cache');
+            stationCache = [];
+            loadStations();
+
+            showToast('Language changed to ' + getLanguageName(code));
+        }
+
+        // Get language name by code
+        function getLanguageName(code) {
+            for (var i = 0; i < languages.length; i++) {
+                if (languages[i].code === code) {
+                    return languages[i].name;
+                }
+            }
+            return code;
         }
 
         // Save configuration

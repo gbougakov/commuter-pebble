@@ -33,7 +33,8 @@ var STORAGE_KEYS = {
   CONNECTIONS: 'nmbs_connections',
   STATION_CACHE: 'nmbs_station_cache',
   FAVORITE_STATIONS: 'nmbs_favorite_stations',
-  SMART_SCHEDULES: 'nmbs_smart_schedules'
+  SMART_SCHEDULES: 'nmbs_smart_schedules',
+  LANGUAGE: 'nmbs_language'
 };
 
 // Configuration limits
@@ -42,8 +43,17 @@ var CONFIG = {
   MAX_DEPARTURES: 11,            // Limit to 11 departures
   MAX_FAVORITE_STATIONS: 6,      // Maximum favorite stations
   USER_AGENT: 'WerknaamCommuter <https://werknaam.be, commuter@werknaam.be>',
-  CONFIG_URL: 'https://assets-eu.gbgk.net/nmbs-pebble/config.html'
+  CONFIG_URL: 'https://assets-eu.gbgk.net/nmbs-pebble/config.html',
+  DEFAULT_LANGUAGE: 'en'         // Default language for API requests
 };
+
+// Supported languages
+var LANGUAGES = [
+  { code: 'en', name: 'English' },
+  { code: 'nl', name: 'Nederlands' },
+  { code: 'fr', name: 'Français' },
+  { code: 'de', name: 'Deutsch' }
+];
 
 module.exports = {
   IRAIL_API_URL: IRAIL_API_URL,
@@ -51,5 +61,6 @@ module.exports = {
   STATION_IDS: STATION_IDS,
   MESSAGE_TYPES: MESSAGE_TYPES,
   STORAGE_KEYS: STORAGE_KEYS,
-  CONFIG: CONFIG
+  CONFIG: CONFIG,
+  LANGUAGES: LANGUAGES
 };

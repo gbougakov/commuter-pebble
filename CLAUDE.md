@@ -191,6 +191,7 @@ User favorites (up to 6) configured via web interface. Station cache (~600 stati
 | `nmbs_from_station` | iRail ID | ~30B | Last from station |
 | `nmbs_to_station` | iRail ID | ~30B | Last to station |
 | `nmbs_connections` | Connection identifiers | ~2KB | For detail fetching |
+| `nmbs_language` | Language code (en/nl/fr/de) | ~5B | Station name language |
 
 Data saved on station change and after each departure sent. Validates on load, resets to defaults on corruption.
 
@@ -283,16 +284,37 @@ All keys defined in `package.json` auto-generate `MESSAGE_KEY_*` constants in C.
 
 ## User Configuration
 
-Web-based config interface (accessed via Pebble mobile app) for favorite stations (max 6) and smart route schedules.
+Web-based config interface (accessed via Pebble mobile app) for favorite stations (max 6), smart route schedules, and language preferences.
 
 ### Architecture
 
 **Data flow:**
 1. iRail API → Station cache (~600 stations, ~50KB)
-2. Config page → User selects favorites, defines schedules (using iRail IDs)
-3. Watch app → Receives IDs, displays names, makes API requests
+2. Config page → User selects favorites, defines schedules, chooses language (using iRail IDs)
+3. Watch app → Receives IDs, displays names, makes API requests with language parameter
 
 **Why iRail IDs:** Stable across localizations, API compatible, no ambiguity.
+
+### Language Support
+
+**Supported languages:**
+- English (en) - default
+- Nederlands (nl)
+- Français (fr)
+- Deutsch (de)
+
+**How it works:**
+1. User selects language preference in config page
+2. Language saved to localStorage (`nmbs_language`)
+3. All iRail API requests include `?lang=` parameter
+4. Station names automatically displayed in selected language
+5. Changing language clears station cache to force refresh
+
+**Implementation:**
+- JavaScript side: Language parameter added to all API requests (connections, stations, details)
+- Config page: Radio button selector with language names
+- Storage: `Storage.getLanguage()` and `Storage.saveLanguage()` functions
+- Default: English (`en`) if no preference set
 
 ### Configuration Page (config.html)
 
@@ -304,6 +326,7 @@ Web-based config interface (accessed via Pebble mobile app) for favorite station
 3. Smart Schedules
    - Simple: Template buttons (Morning Commute, Evening Return, Weekend)
    - Advanced: List with add/remove
+4. Language Settings (radio selector for station name language)
 
 **Returns:** `pebblejs://close#encodedJSON` with `{favoriteStations: [...], smartSchedules: [...]}`
 
