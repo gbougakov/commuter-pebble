@@ -10,6 +10,7 @@
     "uuid": "be76f72c-00d6-4ee2-a7ad-a29c74081283",
     "sdkVersion": "3",
     "enableMultiJS": true,
+    "_comment": "JS files loaded alphabetically with numeric prefixes to ensure correct dependency order: 00-constants.js, 01-storage.js, 02-api.js, 03-data-processor.js, 04-message-handler.js, 05-config-manager.js, index.js (entry point)",
     "capabilities": [
       "configurable"
     ],

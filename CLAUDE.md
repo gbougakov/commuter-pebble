@@ -378,6 +378,139 @@ Quick train schedule previews without opening app. Available on basalt, chalk, d
 
 ---
 
+## Code Organization
+
+The C codebase is modularized for maintainability:
+
+### File Structure
+
+```
+src/c/
+├── nmbs.c              # Main entry point (140 lines)
+├── types.h             # Shared data structures and constants
+├── state.h/c           # Global state management
+├── utils.h/c           # Utility functions (station abbreviation)
+├── menu_layer.h/c      # MenuLayer UI rendering (~520 lines)
+├── detail_window.h/c   # Detail window implementation (~270 lines)
+├── api_handler.h/c     # AppMessage communication (~380 lines)
+└── glances.h/c         # AppGlances support (~80 lines)
+```
+
+### Module Responsibilities
+
+**nmbs.c** - App lifecycle
+- Resource loading/unloading
+- Main window setup
+- Module initialization
+- Entry point (`main()`)
+
+**types.h** - Shared definitions
+- Data structures (`Station`, `TrainDeparture`, `JourneyLeg`, `JourneyDetail`)
+- Message type constants
+- Loading state enum
+- Maximum limits
+
+**state.c/h** - Global state
+- Station data (favorites, selections)
+- Departure data array
+- Loading state machine
+- Request ID tracking
+- Marquee animation state
+- Getter/setter functions for encapsulation
+
+**utils.c/h** - Helper functions
+- `abbreviate_station_name()` - Shortens Belgian station names for display
+
+**menu_layer.c/h** - Main UI
+- MenuLayer callbacks (sections, rows, drawing)
+- Station selector rendering
+- Train departure rendering (times, delays, platforms, icons)
+- Marquee scrolling animation
+- Platform-specific layouts
+
+**detail_window.c/h** - Detail view
+- Journey detail window lifecycle
+- Scrollable leg-by-leg display
+- Platform boxes and timing
+- Station abbreviation
+
+**api_handler.c/h** - Backend communication
+- AppMessage registration
+- Train data requests
+- Detail data requests
+- Message parsing (departures, stations, config)
+- Request ID validation (idempotency)
+- Error handling
+
+**glances.c/h** - Background updates
+- AppGlance slice generation
+- Worker message handling
+- Platform guards (`#if defined(PBL_HEALTH)`)
+
+### Inter-Module Communication
+
+```
+nmbs.c
+  ├─> state.c (init, resource pointers)
+  ├─> menu_layer.c (setup callbacks, icons)
+  ├─> api_handler.c (init with menu ref)
+  └─> glances.c (worker subscription)
+
+menu_layer.c
+  ├─> state.c (read stations, departures, marquee)
+  └─> api_handler.c (request data on selection)
+
+detail_window.c
+  ├─> state.c (read journey detail)
+  └─> utils.c (abbreviate stations)
+
+api_handler.c
+  ├─> state.c (update data, load state)
+  ├─> detail_window.c (show/update window)
+  └─> glances.c (update after data received)
+
+glances.c
+  ├─> state.c (read departures)
+  └─> api_handler.c (request data on worker trigger)
+```
+
+### Benefits of Modular Structure
+
+1. **Separation of concerns**: Each file has one clear responsibility
+2. **Easier debugging**: Isolated logic is simpler to trace
+3. **Testability**: Modules can be unit tested independently
+4. **Maintainability**: Changes localized to specific files
+5. **Code reuse**: Shared state/types prevent duplication
+6. **Faster builds**: Incremental compilation on changes
+
+### Adding New Features
+
+- **New UI element**: Add to `menu_layer.c` or create new UI module
+- **New API message**: Add to `api_handler.c` inbox handler
+- **New data field**: Add to `types.h` struct, update state getters
+- **New utility**: Add to `utils.c`
+
+---
+
+## JavaScript Code Organization
+
+JavaScript split into 7 CommonJS modules (from 903 lines):
+
+```
+src/pkjs/
+├── 00-constants.js      # API URLs, message types, storage keys
+├── 01-storage.js        # LocalStorage (station cache, favorites, schedules)
+├── 02-api.js            # iRail API requests (connections, stations, details)
+├── 03-data-processor.js # Format times, durations, parse connections
+├── 04-message-handler.js # AppMessage protocol, send to watch
+├── 05-config-manager.js # Schedule eval, Pebble event listeners
+└── index.js             # Entry point (requires config-manager)
+```
+
+**Module pattern:** CommonJS with `require()` and `module.exports`
+**File naming:** 00-05 prefix ensures correct webpack load order
+**Event listeners:** Registered at module level in 05-config-manager.js (where `Pebble` object is accessible)
+
 ## Documentation
 
 **Always document relevant changes in this CLAUDE.md file.**
