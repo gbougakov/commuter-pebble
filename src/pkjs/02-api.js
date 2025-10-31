@@ -151,12 +151,14 @@ function fetchConnectionDetails(departureIndex, callback, errorCallback) {
 
     // Fetch connections starting 10 minutes before selected train
     // This ensures we get the exact train plus any earlier alternatives
+    // Calculate the adjusted timestamp once to handle midnight crossings correctly
+    var adjustedTimestamp = identifier.departTime * 1000 - 10 * 60 * 1000;
     var lang = Storage.getLanguage();
     var url = Constants.IRAIL_API_URL +
         '?from=' + encodeURIComponent(fromId) +
         '&to=' + encodeURIComponent(toId) +
-        '&date=' + formatDate(identifier.departTime * 1000) +
-        '&time=' + formatTime(identifier.departTime * 1000 - 10 * 60 * 1000) +
+        '&date=' + formatDate(adjustedTimestamp) +
+        '&time=' + formatTime(adjustedTimestamp) +
         '&format=json' +
         '&lang=' + lang;
 
