@@ -8,8 +8,13 @@ var requestDebounceTimer = null;
 // Fetch stations from iRail API and cache them
 function fetchStations(callback) {
     console.log('Fetching stations from iRail API...');
+
+    // Get language preference for API request
+    var lang = Storage.getLanguage();
+    var url = Constants.IRAIL_STATIONS_URL + '&lang=' + lang;
+
     var xhr = new XMLHttpRequest();
-    xhr.open('GET', Constants.IRAIL_STATIONS_URL, true);
+    xhr.open('GET', url, true);
     xhr.setRequestHeader('User-Agent', Constants.CONFIG.USER_AGENT);
     xhr.onload = function() {
       if (xhr.readyState === 4 && xhr.status === 200) {
@@ -74,12 +79,13 @@ function fetchConnections(fromId, toId, callback, errorCallback) {
       return;
     }
 
-    // Build API URL
+    // Build API URL with language preference
+    var lang = Storage.getLanguage();
     var url = Constants.IRAIL_API_URL +
         '?from=' + encodeURIComponent(fromId) +
         '&to=' + encodeURIComponent(toId) +
         '&format=json' +
-        '&lang=en';
+        '&lang=' + lang;
 
     console.log('Fetching: ' + url);
 
@@ -145,13 +151,14 @@ function fetchConnectionDetails(departureIndex, callback, errorCallback) {
 
     // Fetch connections starting 10 minutes before selected train
     // This ensures we get the exact train plus any earlier alternatives
+    var lang = Storage.getLanguage();
     var url = Constants.IRAIL_API_URL +
         '?from=' + encodeURIComponent(fromId) +
         '&to=' + encodeURIComponent(toId) +
         '&date=' + formatDate(identifier.departTime * 1000) +
         '&time=' + formatTime(identifier.departTime * 1000 - 10 * 60 * 1000) +
         '&format=json' +
-        '&lang=en';
+        '&lang=' + lang;
 
     console.log('Fetching details from: ' + url);
 
