@@ -136,9 +136,10 @@ static void menu_draw_row_callback(GContext *ctx,
       // Draw skeleton: dithered rectangle placeholder
       GRect skeleton_rect = GRect(24, 4, bounds.size.w - 40, 16);
 
-      // Use white dither if selected, black if not
+      // When selected, background is black so use white dither
+      // When not selected, background is white so use black dither
       GColor dither_color = selected ? GColorWhite : GColorBlack;
-      graphics_context_set_fill_color(ctx, dither_color);
+      graphics_context_set_stroke_color(ctx, dither_color);
 
       // Create sparse dithered pattern (every 3rd pixel for less opacity)
       for (int y = skeleton_rect.origin.y; y < skeleton_rect.origin.y + skeleton_rect.size.h; y++) {
