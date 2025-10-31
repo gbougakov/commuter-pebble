@@ -107,11 +107,11 @@ static void menu_draw_row_callback(GContext *ctx,
     if (cell_index->row == 0) {
       // "From" station selector - use start icon
       icon = selected ? s_icon_start_white : s_icon_start;
-      station_name = (state_get_num_stations() > 0) ? state_get_stations()[state_get_from_station_index()].name : "Loading...";
+      station_name = (state_get_num_stations() > 0) ? state_get_stations()[state_get_from_station_index()].name : "Waiting for config...";
     } else {
       // "To" station selector - use finish icon
       icon = selected ? s_icon_finish_white : s_icon_finish;
-      station_name = (state_get_num_stations() > 0) ? state_get_stations()[state_get_to_station_index()].name : "Loading...";
+      station_name = (state_get_num_stations() > 0) ? state_get_stations()[state_get_to_station_index()].name : "Waiting for config...";
     }
 
     // Draw icon (16x16) with some padding
@@ -135,6 +135,21 @@ static void menu_draw_row_callback(GContext *ctx,
   }
 
   // Section 1: Train departures
+
+  // Show waiting message if no stations have been received yet
+  if (!state_are_stations_received()) {
+    bool selected = menu_cell_layer_is_highlighted(cell_layer);
+    GColor text_color = selected ? GColorWhite : GColorBlack;
+    graphics_context_set_text_color(ctx, text_color);
+    graphics_draw_text(ctx,
+                       "Waiting for config...",
+                       fonts_get_system_font(FONT_KEY_GOTHIC_14_BOLD),
+                       GRect(4, 12, bounds.size.w - 8, 24),
+                       GTextOverflowModeTrailingEllipsis,
+                       GTextAlignmentCenter,
+                       NULL);
+    return;
+  }
 
   // Show loading indicator based on state machine
   if (state_is_data_loading()) {

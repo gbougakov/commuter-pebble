@@ -170,6 +170,12 @@ Fetches real-time Belgian train data via PebbleKit JS. List view shows minimal d
 
 ### Station Handling
 
+**Loading sequence (prevents station "blink"):**
+1. App starts with 0 stations, shows "Waiting for config..." skeleton
+2. JavaScript sends favorite stations (if configured) via `MSG_SEND_STATION_COUNT` + `MSG_SEND_STATION`
+3. If no config received within 5 seconds (`CONFIG_TIMEOUT_MS`), falls back to defaults
+4. Once stations loaded (from config or timeout), requests initial train data
+
 **Default stations (fallback):**
 - Brussels-Central: `BE.NMBS.008813003`
 - Antwerp-Central: `BE.NMBS.008821006`
@@ -178,6 +184,11 @@ Fetches real-time Belgian train data via PebbleKit JS. List view shows minimal d
 - Leuven: `BE.NMBS.008833001`
 
 User favorites (up to 6) configured via web interface. Station cache (~600 stations, ~50KB) fetched from iRail API and stored in localStorage.
+
+**Key functions:**
+- `state_init()`: Initializes with 0 stations, sets `s_stations_received = false`
+- `state_load_default_stations()`: Loads fallback stations (called on timeout or config failure)
+- Config timeout timer: Cancelled when stations successfully received from JavaScript
 
 ### Data Persistence
 

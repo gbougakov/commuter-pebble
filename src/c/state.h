@@ -6,8 +6,11 @@
 extern const Station DEFAULT_STATIONS[];
 extern const uint8_t NUM_DEFAULT_STATIONS;
 
-// Initialize state with default stations
+// Initialize state (start with no stations - wait for config from JS)
 void state_init(void);
+
+// Load default fallback stations (called if config fails)
+void state_load_default_stations(void);
 
 // Station management
 Station* state_get_stations(void);
@@ -45,6 +48,10 @@ void state_increment_detail_request_id(void);
 // Timeout timer management
 AppTimer* state_get_timeout_timer(void);
 void state_set_timeout_timer(AppTimer* timer);
+
+// Config timeout timer
+AppTimer* state_get_config_timeout_timer(void);
+void state_set_config_timeout_timer(AppTimer* timer);
 
 // Detail window state
 uint16_t state_get_selected_departure_index(void);

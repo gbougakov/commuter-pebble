@@ -43,8 +43,16 @@ static int16_t s_marquee_offset = 0;
 static uint16_t s_selected_row = 0;
 static int16_t s_marquee_max_offset = 0;
 
-// Initialize state with default stations
+// Initialize state (start with no stations - wait for config from JS)
 void state_init(void) {
+  s_num_stations = 0;
+  s_from_station_index = 0;
+  s_to_station_index = 1;
+  s_stations_received = false;
+}
+
+// Load default fallback stations (called if config fails)
+void state_load_default_stations(void) {
   s_num_stations = NUM_DEFAULT_STATIONS;
   for (uint8_t i = 0; i < NUM_DEFAULT_STATIONS && i < MAX_FAVORITE_STATIONS; i++) {
     strncpy(s_stations[i].name, DEFAULT_STATIONS[i].name, sizeof(s_stations[i].name) - 1);
@@ -93,6 +101,11 @@ void state_increment_detail_request_id(void) { s_last_detail_request_id++; }
 // Timeout timer management
 AppTimer* state_get_timeout_timer(void) { return s_timeout_timer; }
 void state_set_timeout_timer(AppTimer* timer) { s_timeout_timer = timer; }
+
+// Config timeout timer
+static AppTimer *s_config_timeout_timer = NULL;
+AppTimer* state_get_config_timeout_timer(void) { return s_config_timeout_timer; }
+void state_set_config_timeout_timer(AppTimer* timer) { s_config_timeout_timer = timer; }
 
 // Detail window state
 uint16_t state_get_selected_departure_index(void) { return s_selected_departure_index; }
