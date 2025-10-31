@@ -143,6 +143,30 @@ function saveSmartSchedules(schedules) {
   }
 }
 
+// Get language preference from localStorage
+function getLanguage() {
+  try {
+    var lang = localStorage.getItem(Constants.STORAGE_KEYS.LANGUAGE);
+    if (lang) {
+      console.log('Loaded language preference: ' + lang);
+      return lang;
+    }
+  } catch (e) {
+    console.log('Error loading language preference: ' + e.message);
+  }
+  return Constants.CONFIG.DEFAULT_LANGUAGE;
+}
+
+// Save language preference to localStorage
+function saveLanguage(language) {
+  try {
+    localStorage.setItem(Constants.STORAGE_KEYS.LANGUAGE, language);
+    console.log('Saved language preference: ' + language);
+  } catch (e) {
+    console.log('Error saving language preference: ' + e.message);
+  }
+}
+
 // Current route getters/setters
 function getCurrentFromStation() {
   return currentFromStation;
@@ -184,6 +208,8 @@ module.exports = {
   saveFavoriteStations: saveFavoriteStations,
   getSmartSchedules: getSmartSchedules,
   saveSmartSchedules: saveSmartSchedules,
+  getLanguage: getLanguage,
+  saveLanguage: saveLanguage,
   getCurrentFromStation: getCurrentFromStation,
   setCurrentFromStation: setCurrentFromStation,
   getCurrentToStation: getCurrentToStation,
