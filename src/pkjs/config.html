@@ -874,8 +874,8 @@
 
         // Initialize
         window.onload = function() {
-            loadStations();
-            loadConfig();
+            loadConfig();  // Load config first to get language preference
+            loadStations();  // Then load stations with correct language
             renderLanguageSelector();
         };
 
@@ -899,6 +899,8 @@
                 try {
                     stationCache = JSON.parse(cached);
                     console.log('Loaded ' + stationCache.length + ' cached stations');
+                    // Re-render station slots with cached data
+                    renderStationSlots();
                 } catch (e) {
                     console.log('Error parsing cached stations');
                 }
@@ -920,6 +922,8 @@
                             });
                             localStorage.setItem('nmbs_station_cache', JSON.stringify(stationCache));
                             console.log('Fetched ' + stationCache.length + ' stations');
+                            // Re-render station slots with fresh data
+                            renderStationSlots();
                         }
                     } catch (e) {
                         console.log('Error parsing stations API');
