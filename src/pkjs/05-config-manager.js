@@ -71,13 +71,17 @@ function handleWebviewClosed(e) {
         if (config.language) {
           Storage.saveLanguage(config.language);
           console.log('Saved language preference: ' + config.language);
+
+          // Reload station cache from localStorage to get updated station names
+          // (config page may have refreshed cache with new language)
+          Storage.loadCachedStations();
         }
 
         // Save favorite stations
         if (config.favoriteStations && config.favoriteStations.length > 0) {
           Storage.saveFavoriteStations(config.favoriteStations);
 
-          // Send stations to watch
+          // Send stations to watch (with updated names from reloaded cache)
           MessageHandler.sendStationsToWatch(config.favoriteStations);
         }
 
@@ -158,13 +162,17 @@ Pebble.addEventListener('webviewclosed', function(e) {
       if (config.language) {
         Storage.saveLanguage(config.language);
         console.log('Saved language preference: ' + config.language);
+
+        // Reload station cache from localStorage to get updated station names
+        // (config page may have refreshed cache with new language)
+        Storage.loadCachedStations();
       }
 
       // Save favorite stations
       if (config.favoriteStations && config.favoriteStations.length > 0) {
         Storage.saveFavoriteStations(config.favoriteStations);
 
-        // Send stations to watch
+        // Send stations to watch (with updated names from reloaded cache)
         MessageHandler.sendStationsToWatch(config.favoriteStations);
       }
 
