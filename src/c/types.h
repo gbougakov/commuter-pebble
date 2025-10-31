@@ -22,6 +22,7 @@
 
 // Loading timeout
 #define LOADING_TIMEOUT_MS 10000  // 10 seconds
+#define CONFIG_TIMEOUT_MS 5000    // 5 seconds to wait for config from JS
 
 // Loading state machine for detailed user feedback
 typedef enum {

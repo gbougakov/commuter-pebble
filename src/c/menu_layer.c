@@ -107,11 +107,11 @@ static void menu_draw_row_callback(GContext *ctx,
     if (cell_index->row == 0) {
       // "From" station selector - use start icon
       icon = selected ? s_icon_start_white : s_icon_start;
-      station_name = (state_get_num_stations() > 0) ? state_get_stations()[state_get_from_station_index()].name : "Loading...";
+      station_name = (state_get_num_stations() > 0) ? state_get_stations()[state_get_from_station_index()].name : NULL;
     } else {
       // "To" station selector - use finish icon
       icon = selected ? s_icon_finish_white : s_icon_finish;
-      station_name = (state_get_num_stations() > 0) ? state_get_stations()[state_get_to_station_index()].name : "Loading...";
+      station_name = (state_get_num_stations() > 0) ? state_get_stations()[state_get_to_station_index()].name : NULL;
     }
 
     // Draw icon (16x16) with some padding
@@ -121,20 +121,55 @@ static void menu_draw_row_callback(GContext *ctx,
       graphics_draw_bitmap_in_rect(ctx, icon, icon_rect);
     }
 
-    // Draw station name to the right of icon
-    graphics_context_set_text_color(ctx, text_color);
-    graphics_draw_text(ctx,
-                       station_name,
-                       fonts_get_system_font(FONT_KEY_GOTHIC_18_BOLD),
-                       GRect(24, 0, bounds.size.w - 28, 20),
-                       GTextOverflowModeTrailingEllipsis,
-                       GTextAlignmentLeft,
-                       NULL);
+    // Draw station name or skeleton
+    if (station_name) {
+      // Draw actual station name
+      graphics_context_set_text_color(ctx, text_color);
+      graphics_draw_text(ctx,
+                         station_name,
+                         fonts_get_system_font(FONT_KEY_GOTHIC_18_BOLD),
+                         GRect(24, 0, bounds.size.w - 28, 20),
+                         GTextOverflowModeTrailingEllipsis,
+                         GTextAlignmentLeft,
+                         NULL);
+    } else {
+      // Draw skeleton: dithered rectangle placeholder
+      GRect skeleton_rect = GRect(24, 4, bounds.size.w - 40, 16);
+
+      // When selected, background is black so use white dither
+      // When not selected, background is white so use black dither
+      GColor dither_color = selected ? GColorWhite : GColorBlack;
+      graphics_context_set_stroke_color(ctx, dither_color);
+
+      // Create sparse dithered pattern (every 3rd pixel for less opacity)
+      for (int y = skeleton_rect.origin.y; y < skeleton_rect.origin.y + skeleton_rect.size.h; y++) {
+        for (int x = skeleton_rect.origin.x; x < skeleton_rect.origin.x + skeleton_rect.size.w; x++) {
+          if ((x + y) % 3 == 0) {
+            graphics_draw_pixel(ctx, GPoint(x, y));
+          }
+        }
+      }
+    }
 
     return;
   }
 
   // Section 1: Train departures
+
+  // Show loading message if no stations have been received yet
+  if (!state_are_stations_received()) {
+    bool selected = menu_cell_layer_is_highlighted(cell_layer);
+    GColor text_color = selected ? GColorWhite : GColorBlack;
+    graphics_context_set_text_color(ctx, text_color);
+    graphics_draw_text(ctx,
+                       "Loading...",
+                       fonts_get_system_font(FONT_KEY_GOTHIC_14_BOLD),
+                       GRect(4, 12, bounds.size.w - 8, 24),
+                       GTextOverflowModeTrailingEllipsis,
+                       GTextAlignmentCenter,
+                       NULL);
+    return;
+  }
 
   // Show loading indicator based on state machine
   if (state_is_data_loading()) {

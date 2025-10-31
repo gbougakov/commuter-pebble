@@ -6,6 +6,21 @@
 // Menu layer reference (needed for reload)
 static MenuLayer *s_menu_layer = NULL;
 
+// Config timeout callback - fallback to defaults if no config received
+static void config_timeout_callback(void *data) {
+  state_set_config_timeout_timer(NULL);
+
+  // If stations haven't been received yet, fall back to defaults
+  if (!state_are_stations_received()) {
+    APP_LOG(APP_LOG_LEVEL_WARNING, "Config timeout - falling back to default stations");
+    state_load_default_stations();
+    menu_layer_reload_data(s_menu_layer);
+
+    // Request initial train data with default stations
+    api_handler_request_train_data();
+  }
+}
+
 // Timeout watchdog callback
 static void loading_timeout_callback(void *data) {
   state_set_timeout_timer(NULL);
@@ -350,6 +365,15 @@ static void inbox_received_callback(DictionaryIterator *iterator, void *context)
     if (index == state_get_num_stations() - 1) {
       state_set_stations_received(true);
       APP_LOG(APP_LOG_LEVEL_INFO, "All stations received, requesting initial data");
+
+      // Cancel config timeout timer since we got the config
+      AppTimer *config_timer = state_get_config_timeout_timer();
+      if (config_timer) {
+        app_timer_cancel(config_timer);
+        state_set_config_timeout_timer(NULL);
+        APP_LOG(APP_LOG_LEVEL_INFO, "Config timeout timer cancelled");
+      }
+
       menu_layer_reload_data(s_menu_layer);
 
       // Request initial train data now that we have stations
@@ -405,6 +429,10 @@ void api_handler_init(MenuLayer *menu_layer) {
 
   // Open AppMessage with appropriate buffer sizes
   app_message_open(512, 512);
+
+  // Start config timeout timer (fallback to defaults if no config received)
+  state_set_config_timeout_timer(app_timer_register(CONFIG_TIMEOUT_MS, config_timeout_callback, NULL));
+  APP_LOG(APP_LOG_LEVEL_INFO, "Config timeout timer started (%d ms)", CONFIG_TIMEOUT_MS);
 }
 
 // Handle timeout
