@@ -67,6 +67,12 @@ function handleWebviewClosed(e) {
         var config = JSON.parse(decodeURIComponent(e.response));
         console.log('Received config: ' + JSON.stringify(config));
 
+        // Save language preference
+        if (config.language) {
+          Storage.saveLanguage(config.language);
+          console.log('Saved language preference: ' + config.language);
+        }
+
         // Save favorite stations
         if (config.favoriteStations && config.favoriteStations.length > 0) {
           Storage.saveFavoriteStations(config.favoriteStations);
@@ -147,6 +153,12 @@ Pebble.addEventListener('webviewclosed', function(e) {
     try {
       var config = JSON.parse(decodeURIComponent(e.response));
       console.log('Received config: ' + JSON.stringify(config));
+
+      // Save language preference
+      if (config.language) {
+        Storage.saveLanguage(config.language);
+        console.log('Saved language preference: ' + config.language);
+      }
 
       // Save favorite stations
       if (config.favoriteStations && config.favoriteStations.length > 0) {
