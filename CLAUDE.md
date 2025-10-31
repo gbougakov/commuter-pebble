@@ -295,6 +295,14 @@ Web-based config interface (accessed via Pebble mobile app) for favorite station
 
 **Why iRail IDs:** Stable across localizations, API compatible, no ambiguity.
 
+**CRITICAL: Separate localStorage contexts**
+- Config page (runs in webview) has its own localStorage
+- PebbleKit JS (runs in app context) has separate localStorage
+- **They do NOT share data!**
+- Communication only via `pebblejs://close#` mechanism
+- Each side must fetch stations independently from iRail API
+- When language changes: both sides fetch fresh data with new `?lang=` parameter
+
 ### Language Support
 
 **Supported languages:**
@@ -305,14 +313,18 @@ Web-based config interface (accessed via Pebble mobile app) for favorite station
 
 **How it works:**
 1. User selects language preference in config page
-2. Language saved to localStorage (`nmbs_language`)
-3. All iRail API requests include `?lang=` parameter
-4. Station names automatically displayed in selected language
-5. Changing language clears station cache to force refresh
+2. Config page fetches stations with new language for display
+3. User saves config → language sent via `pebblejs://close#`
+4. PebbleKit JS receives language, saves to its own localStorage
+5. PebbleKit JS fetches fresh stations from API with new `?lang=` parameter
+6. PebbleKit JS sends station names (in new language) to watch
+7. All subsequent API requests use new language parameter
 
 **Implementation:**
-- JavaScript side: Language parameter added to all API requests (connections, stations, details)
-- Config page: Radio button selector with language names
+- Both sides maintain separate station caches (separate localStorage!)
+- Config page: Fetches stations for UI display in selected language
+- PebbleKit JS: Fetches stations after language change to update its cache
+- Language parameter added to all API requests (connections, stations, details)
 - Storage: `Storage.getLanguage()` and `Storage.saveLanguage()` functions
 - Default: English (`en`) if no preference set
 
