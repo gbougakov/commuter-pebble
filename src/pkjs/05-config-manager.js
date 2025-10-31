@@ -67,12 +67,31 @@ function handleWebviewClosed(e) {
         var config = JSON.parse(decodeURIComponent(e.response));
         console.log('Received config: ' + JSON.stringify(config));
 
+        // Save language preference
+        if (config.language) {
+          Storage.saveLanguage(config.language);
+          console.log('Saved language preference: ' + config.language);
+
+          // Config page and PebbleKit JS have separate localStorage!
+          // Need to fetch fresh stations with new language
+          API.fetchStations(function() {
+            console.log('Fetched stations with new language');
+            // After stations are fetched, send them to watch if we have favorites
+            if (config.favoriteStations && config.favoriteStations.length > 0) {
+              MessageHandler.sendStationsToWatch(config.favoriteStations);
+            }
+          });
+        }
+
         // Save favorite stations
         if (config.favoriteStations && config.favoriteStations.length > 0) {
           Storage.saveFavoriteStations(config.favoriteStations);
 
-          // Send stations to watch
-          MessageHandler.sendStationsToWatch(config.favoriteStations);
+          // Send stations to watch (but only if language wasn't changed above)
+          // If language was changed, we'll send after fetching new stations
+          if (!config.language) {
+            MessageHandler.sendStationsToWatch(config.favoriteStations);
+          }
         }
 
         // Save smart schedules
@@ -148,12 +167,31 @@ Pebble.addEventListener('webviewclosed', function(e) {
       var config = JSON.parse(decodeURIComponent(e.response));
       console.log('Received config: ' + JSON.stringify(config));
 
+      // Save language preference
+      if (config.language) {
+        Storage.saveLanguage(config.language);
+        console.log('Saved language preference: ' + config.language);
+
+        // Config page and PebbleKit JS have separate localStorage!
+        // Need to fetch fresh stations with new language
+        API.fetchStations(function() {
+          console.log('Fetched stations with new language');
+          // After stations are fetched, send them to watch if we have favorites
+          if (config.favoriteStations && config.favoriteStations.length > 0) {
+            MessageHandler.sendStationsToWatch(config.favoriteStations);
+          }
+        });
+      }
+
       // Save favorite stations
       if (config.favoriteStations && config.favoriteStations.length > 0) {
         Storage.saveFavoriteStations(config.favoriteStations);
 
-        // Send stations to watch
-        MessageHandler.sendStationsToWatch(config.favoriteStations);
+        // Send stations to watch (but only if language wasn't changed above)
+        // If language was changed, we'll send after fetching new stations
+        if (!config.language) {
+          MessageHandler.sendStationsToWatch(config.favoriteStations);
+        }
       }
 
       // Save smart schedules

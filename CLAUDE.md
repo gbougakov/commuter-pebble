@@ -191,6 +191,7 @@ User favorites (up to 6) configured via web interface. Station cache (~600 stati
 | `nmbs_from_station` | iRail ID | ~30B | Last from station |
 | `nmbs_to_station` | iRail ID | ~30B | Last to station |
 | `nmbs_connections` | Connection identifiers | ~2KB | For detail fetching |
+| `nmbs_language` | Language code (en/nl/fr/de) | ~5B | Station name language |
 
 Data saved on station change and after each departure sent. Validates on load, resets to defaults on corruption.
 
@@ -283,16 +284,49 @@ All keys defined in `package.json` auto-generate `MESSAGE_KEY_*` constants in C.
 
 ## User Configuration
 
-Web-based config interface (accessed via Pebble mobile app) for favorite stations (max 6) and smart route schedules.
+Web-based config interface (accessed via Pebble mobile app) for favorite stations (max 6), smart route schedules, and language preferences.
 
 ### Architecture
 
 **Data flow:**
 1. iRail API → Station cache (~600 stations, ~50KB)
-2. Config page → User selects favorites, defines schedules (using iRail IDs)
-3. Watch app → Receives IDs, displays names, makes API requests
+2. Config page → User selects favorites, defines schedules, chooses language (using iRail IDs)
+3. Watch app → Receives IDs, displays names, makes API requests with language parameter
 
 **Why iRail IDs:** Stable across localizations, API compatible, no ambiguity.
+
+**CRITICAL: Separate localStorage contexts**
+- Config page (runs in webview) has its own localStorage
+- PebbleKit JS (runs in app context) has separate localStorage
+- **They do NOT share data!**
+- Communication only via `pebblejs://close#` mechanism
+- Each side must fetch stations independently from iRail API
+- When language changes: both sides fetch fresh data with new `?lang=` parameter
+
+### Language Support
+
+**Supported languages:**
+- English (en) - default
+- Nederlands (nl)
+- Français (fr)
+- Deutsch (de)
+
+**How it works:**
+1. User selects language preference in config page
+2. Config page fetches stations with new language for display
+3. User saves config → language sent via `pebblejs://close#`
+4. PebbleKit JS receives language, saves to its own localStorage
+5. PebbleKit JS fetches fresh stations from API with new `?lang=` parameter
+6. PebbleKit JS sends station names (in new language) to watch
+7. All subsequent API requests use new language parameter
+
+**Implementation:**
+- Both sides maintain separate station caches (separate localStorage!)
+- Config page: Fetches stations for UI display in selected language
+- PebbleKit JS: Fetches stations after language change to update its cache
+- Language parameter added to all API requests (connections, stations, details)
+- Storage: `Storage.getLanguage()` and `Storage.saveLanguage()` functions
+- Default: English (`en`) if no preference set
 
 ### Configuration Page (config.html)
 
@@ -304,6 +338,7 @@ Web-based config interface (accessed via Pebble mobile app) for favorite station
 3. Smart Schedules
    - Simple: Template buttons (Morning Commute, Evening Return, Weekend)
    - Advanced: List with add/remove
+4. Language Settings (radio selector for station name language)
 
 **Returns:** `pebblejs://close#encodedJSON` with `{favoriteStations: [...], smartSchedules: [...]}`
 
